@@ -267,8 +267,7 @@ const KO_MSGS = ['¡Casi! Mira lo que dice el libro:', 'No pasa nada, te la vuel
 function homeMessage(r) {
   const failed = failedIds().length;
   if (S.cur) return `Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias. Pulsa <b>Continuar</b> para seguir donde lo dejaste.`;
-  if (!S.diag && S.n > 0) return `Cuando quieras, pulsa <b>Seguir estudiando</b> y yo elijo las preguntas. También puedes hacer el <b>diagnóstico</b> completo.`;
-  if (!S.diag) return `Te propongo empezar con un <b>diagnóstico</b> de ${DIAG_LEN} preguntas para ver qué sabes ya. ¡Sin presión!`;
+  if (!S.diag) return `Lo primero es el <b>diagnóstico</b>: ${DIAG_LEN} preguntas para saber qué sabes ya y enfocar bien la práctica. ¡Sin presión!`;
   if (r.ready) return `¡Estás <b>lista</b>, ${NAME}! 🎉 Si quieres, sigue repasando un poquito para afianzar.`;
   const simFailed = S.sims.length && S.sims.at(-1).score < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN && failedIds().length > 0;
   if (simFailed) return `En el simulacro sacaste un <b>${pct(S.sims.at(-1).score)}%</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo 💪`;
@@ -307,7 +306,7 @@ function onboardingSteps() {
     { mood: 'talk', html: `<p><b>${CREATOR}</b> me ha creado para ayudarte con tus estudios de enfermería.</p><p>Me ha pedido que te cuide mucho 💙</p>` },
     { mood: 'think', html: `<p>Me he leído tus apuntes de arriba abajo 📚</p><ul class="steps-list">${temas}</ul><p>Las respuestas correctas y las citas salen <b>literalmente de tu libro</b>. No me invento nada.</p>` },
     { mood: 'talk', html: `<p>Así vamos a trabajar:</p><ul class="steps-list">
-        <li><span class="n">1</span><span><b>Diagnóstico:</b> una ronda rápida para ver qué sabes.</span></li>
+        <li><span class="n">1</span><span><b>Diagnóstico:</b> lo primero de todo. ${DIAG_LEN} preguntas para ver qué sabes y enfocar tu práctica.</span></li>
         <li><span class="n">2</span><span><b>Práctica inteligente:</b> te pregunto más lo que fallas, hasta que lo domines.</span></li>
         <li><span class="n">3</span><span><b>Simulacro:</b> un examen de prueba para comprobar que estás lista.</span></li></ul>` },
     { mood: 'happy', html: `<p>Después de cada respuesta te enseño <b>la frase exacta del libro</b> y su página.</p><p>Así también aprendes de los fallos 😉</p>` },
@@ -355,6 +354,7 @@ function showOnboarding(i = 0) {
 function showHome() {
   const r = readiness();
   const all = qStats();
+  const lock = S.diag ? '' : 'locked';
   const failed = failedIds().length;
   const checks = r.checks.map(c => `<li class="${c.ok ? 'done' : ''}"><span class="ck">${c.ok ? '✓' : ''}</span><span>${c.label}<br><span class="muted small">${c.info}</span></span></li>`).join('');
   const temas = r.temas.map(t => {
@@ -362,7 +362,7 @@ function showHome() {
     const total = conceptIds({ tema: t.id }).length;
     const seen = seenCount({ tema: t.id });
     return `
-      <div class="card tema" data-tema="${t.id}">
+      <div class="card tema ${S.diag ? '' : 'locked'}" data-tema="${t.id}">
         <div class="head">
           <div class="emoji">${t.emoji}</div>
           <div><div class="name">${esc(t.nombre)}</div><div class="meta">${esc(t.corto)} · ${qs.ok} bien de ${qs.total} · ${qs.seen} respondidas</div></div>
@@ -371,7 +371,7 @@ function showHome() {
       </div>`;
   }).join('');
 
-  const main = (S.diag || S.n > 0)
+  const main = S.diag
     ? `<button class="btn" id="study">Seguir estudiando<span class="sub">KAI elige las preguntas por ti</span></button>`
     : `<button class="btn" id="diag">Empezar diagnóstico<span class="sub">${DIAG_LEN} preguntas · unos 5 minutos</span></button>`;
 
@@ -406,13 +406,13 @@ function showHome() {
       ${main}
 
       <div class="grid2">
-        <button class="tile" id="fallos" ${failed ? '' : 'disabled'}><span class="ic">🔁</span><b>Repasar fallos${failed ? `<span class="badge">${failed}</span>` : ''}</b><span>Solo lo que has fallado</span></button>
-        <button class="tile" id="sim"><span class="ic">📝</span><b>Simulacro</b><span>${SIM_LEN} preguntas tipo examen, sin ayudas</span></button>
+        <button class="tile ${lock}" id="fallos" ${failed || !S.diag ? '' : 'disabled'}><span class="ic">🔁</span><b>Repasar fallos${failed ? `<span class="badge">${failed}</span>` : ''}</b><span>Solo lo que has fallado</span></button>
+        <button class="tile ${lock}" id="sim"><span class="ic">📝</span><b>Simulacro</b><span>${SIM_LEN} preguntas tipo examen, sin ayudas</span></button>
         <button class="tile" id="progress"><span class="ic">📊</span><b>Mi progreso</b><span>Por temas y apartados</span></button>
         <button class="tile" id="diag2"><span class="ic">🩺</span><b>Diagnóstico</b><span>${S.diag ? `Último: ${pct(S.diag.score)}%` : 'Ver qué sabes ya'}</span></button>
       </div>
 
-      <div class="section-title"><h2>Temas</h2><span class="muted small">Toca uno para practicarlo</span></div>
+      <div class="section-title"><h2>Temas</h2><span class="muted small">${S.diag ? 'Toca uno para practicarlo' : '🔒 Tras el diagnóstico'}</span></div>
       ${temas}
 
       <div class="footer">Hecho con 💙 por ${CREATOR} · KAI v1</div>
@@ -424,7 +424,7 @@ function showHome() {
   app.querySelector('#diag')?.addEventListener('click', () => startSession('diag'));
   app.querySelector('#diag2').addEventListener('click', () => startSession('diag'));
   app.querySelector('#fallos').addEventListener('click', () => startSession('fallos'));
-  app.querySelector('#sim').addEventListener('click', confirmSim);
+  app.querySelector('#sim').addEventListener('click', () => S.diag ? confirmSim() : showDiagRequired());
   app.querySelector('#progress').addEventListener('click', showProgress);
   app.querySelector('#menu').addEventListener('click', showMenu);
   app.querySelectorAll('.tema').forEach(el => el.addEventListener('click', () => startSession('practice', { tema: el.dataset.tema })));
@@ -492,7 +492,18 @@ function showProgress() {
 }
 
 // ---------- Sesión de test ----------
+function showDiagRequired() {
+  modal(`
+    <div class="kai-row"><div class="kai-wrap">${kaiSVG('happy')}</div><div class="bubble">¡Primero el <b>diagnóstico</b>! 🩺</div></div>
+    <p>Son ${DIAG_LEN} preguntas de todos los apartados. Con ellas sé qué dominas ya y qué no, y así la práctica se centra desde el principio en lo que más te hace falta.</p>
+    <button class="btn" data-a="go">${S.cur?.type === 'diag' ? 'Continuar el diagnóstico' : 'Empezar el diagnóstico'}</button>
+    <button class="btn ghost" data-a="close">Ahora no</button>`, (el, close) => {
+    el.querySelector('[data-a=go]').onclick = () => { close(); S.cur?.type === 'diag' ? resumeSession() : startSession('diag'); };
+    el.querySelector('[data-a=close]').onclick = close;
+  });
+}
 function startSession(type, filter = {}) {
+  if (!S.diag && type !== 'diag') return showDiagRequired();
   if (S.cur && !confirm(`Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias. ¿Lo dejas y empiezas otra cosa?`)) return;
   S.cur = null;
   let fixed = null;
@@ -679,12 +690,21 @@ async function loadHighlights() {
   return HL;
 }
 let viewerEl = null;
+let lockedY = 0;
+function lockScroll() {
+  lockedY = window.scrollY;
+  Object.assign(document.body.style, { position: 'fixed', top: `-${lockedY}px`, left: '0', right: '0', overflow: 'hidden' });
+}
+function unlockScroll() {
+  Object.assign(document.body.style, { position: '', top: '', left: '', right: '', overflow: '' });
+  window.scrollTo(0, lockedY);
+}
 let ignorePop = false; // el history.back() que hacemos al cerrar el visor no debe tocar el test
 function closeBook(fromPop = false) {
   if (!viewerEl) return;
   viewerEl.remove();
   viewerEl = null;
-  document.body.style.overflow = '';
+  unlockScroll();
   if (!fromPop) { ignorePop = true; try { history.back(); } catch (e) { ignorePop = false; } }
 }
 async function openBook(qid) {
@@ -710,7 +730,7 @@ async function openBook(qid) {
     </div></div>
     <div class="v-quote">📖 ${fmtQuote(q.fuente)}</div>`;
   document.body.appendChild(viewerEl);
-  document.body.style.overflow = 'hidden';
+  lockScroll();
   guardTaps(viewerEl);
   try { history.pushState({ kai: 'book' }, ''); } catch (e) { /* sin historial */ }
 

@@ -303,3 +303,5 @@ p { margin: 0; line-height: 1.5; }
 .v-quote { background: var(--card); padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px); font-size: 14px; line-height: 1.45; max-height: 28vh; overflow: auto; border-top: 1px solid var(--line); }
 .sec-nums { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
 .sec-nums span:last-child { color: var(--ink-3); }
+.tile.locked, .tema.locked { opacity: .55; }
+.tile.locked b::after, .tema.locked .name::after { content: ' 🔒'; }
