@@ -701,7 +701,7 @@ async function openBook(qid) {
   viewerEl.innerHTML = `
     <div class="v-top">
       <button class="v-back" data-a="close" aria-label="Volver al test">← Volver</button>
-      <div class="v-title"><b>${esc(t ? t.corto : '')} · pág. ${esc(pag)}</b><span>${rects.length ? 'Lo tienes subrayado en amarillo' : 'La frase está en esta página'}</span></div>
+      <div class="v-title"><b>${esc(t ? t.corto : '')} · pág. ${esc(pag)}</b><span>${rects.length ? 'Subrayado en amarillo' : 'La frase está en esta página'} · pellizca para hacer zoom</span></div>
       <div class="v-zoom"><button class="icon-btn" data-a="out" aria-label="Alejar">−</button><button class="icon-btn" data-a="in" aria-label="Acercar">+</button></div>
     </div>
     <div class="v-scroll"><div class="v-page">
@@ -717,22 +717,72 @@ async function openBook(qid) {
   const scroller = viewerEl.querySelector('.v-scroll');
   const page = viewerEl.querySelector('.v-page');
   const im = page.querySelector('img');
-  let zoom = rects.length ? 2 : 1;
-  const focus = () => {
-    // Centra la vista en el primer subrayado
+  const MIN_Z = 1, MAX_Z = 5;
+  let zoom = 1;
+  // Cambia el zoom manteniendo fijo el punto (cx, cy) de la pantalla (coordenadas dentro del visor)
+  const setZoom = (z, cx = scroller.clientWidth / 2, cy = scroller.clientHeight / 2) => {
+    z = Math.min(MAX_Z, Math.max(MIN_Z, z));
+    const fx = (scroller.scrollLeft + cx) / page.clientWidth;
+    const fy = (scroller.scrollTop + cy) / page.clientHeight;
+    zoom = z;
+    page.style.width = `${zoom * 100}%`;
+    scroller.scrollLeft = fx * page.clientWidth - cx;
+    scroller.scrollTop = fy * page.clientHeight - cy;
+  };
+  const focusHighlight = () => {
+    // Acerca y centra la vista en el primer subrayado
     const r = rects[0];
     if (!r) return;
+    zoom = 2;
+    page.style.width = '200%';
     const W = page.clientWidth, H = page.clientHeight;
     scroller.scrollLeft = Math.max(0, (r[0] + r[2] / 2) * W - scroller.clientWidth / 2);
     scroller.scrollTop = Math.max(0, (r[1] + r[3] / 2) * H - scroller.clientHeight / 2);
   };
-  const apply = () => { page.style.width = `${zoom * 100}%`; requestAnimationFrame(focus); };
-  im.onload = apply;
-  if (im.complete) apply();
+  im.onload = () => requestAnimationFrame(focusHighlight);
+  if (im.complete) requestAnimationFrame(focusHighlight);
   im.onerror = () => { scroller.innerHTML = '<p class="muted" style="padding:24px;text-align:center">No he podido cargar la página. Comprueba la conexión.</p>'; };
   viewerEl.querySelector('[data-a=close]').onclick = () => closeBook();
-  viewerEl.querySelector('[data-a=in]').onclick = () => { zoom = Math.min(4, zoom + 0.5); apply(); };
-  viewerEl.querySelector('[data-a=out]').onclick = () => { zoom = Math.max(1, zoom - 0.5); apply(); };
+  viewerEl.querySelector('[data-a=in]').onclick = () => setZoom(zoom * 1.4);
+  viewerEl.querySelector('[data-a=out]').onclick = () => setZoom(zoom / 1.4);
+
+  // Pellizcar con dos dedos para hacer zoom; doble toque para acercar/alejar
+  const local = t => { const b = scroller.getBoundingClientRect(); return [t.clientX - b.left, t.clientY - b.top]; };
+  const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  let pinch = null, lastTap = 0;
+  scroller.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const [a, b] = e.touches;
+      pinch = { d0: dist(a, b), z0: zoom };
+    }
+  }, { passive: false });
+  scroller.addEventListener('touchmove', e => {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    const [a, b] = e.touches;
+    const [ax, ay] = local(a), [bx, by] = local(b);
+    setZoom(pinch.z0 * dist(a, b) / pinch.d0, (ax + bx) / 2, (ay + by) / 2);
+  }, { passive: false });
+  scroller.addEventListener('touchend', e => {
+    if (pinch && e.touches.length < 2) { pinch = null; return; }
+    if (e.touches.length || e.changedTouches.length !== 1) return;
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      const [x, y] = local(e.changedTouches[0]);
+      setZoom(zoom > 1.3 ? 1 : 2.5, x, y);
+      lastTap = 0;
+    } else lastTap = now;
+  });
+  // Safari: evita que el pellizco haga zoom de toda la página
+  ['gesturestart', 'gesturechange'].forEach(ev => viewerEl.addEventListener(ev, e => e.preventDefault()));
+  // Ordenador: rueda del ratón con Ctrl (o gesto del trackpad) para hacer zoom
+  scroller.addEventListener('wheel', e => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    const [x, y] = local(e);
+    setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), x, y);
+  }, { passive: false });
 }
 
 // Cita del libro: si es un fragmento que empieza a mitad de frase, se marca con «…»
