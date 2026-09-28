@@ -4,7 +4,7 @@ import { kaiSVG, setKaiMood } from './kai.js';
 // Configuración
 // ------------------------------------------------------------------
 const NAME = 'Cristina';
-const CREATOR = 'Quique';
+const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
@@ -125,10 +125,21 @@ function estimate(filter = {}) {
   const ids = conceptIds(filter);
   return ids.length ? ids.reduce((a, id) => a + conceptP(id), 0) / ids.length : 0;
 }
-function coverage(filter = {}) {
-  const ids = conceptIds(filter);
-  return ids.length ? seenCount(filter) / ids.length : 0;
+// Recuento EXACTO por preguntas: total, respondidas alguna vez, bien (última respuesta correcta), mal
+function qStats(filter = {}) {
+  let total = 0, seen = 0, ok = 0, ko = 0;
+  for (const p of DATA.preguntas) {
+    if (filter.tema && p.tema !== filter.tema) continue;
+    if (filter.sec && secKey(p) !== filter.sec) continue;
+    total++;
+    const s = S.q[p.id];
+    if (s && s.seen) { seen++; if (s.lastOk) ok++; else ko++; }
+  }
+  return { total, seen, ok, ko, pSeen: total ? seen / total : 0, pOk: total ? ok / total : 0 };
 }
+const coverage = (filter = {}) => qStats(filter).pSeen;
+const MIN_FORECAST = 20; // respuestas mínimas para mostrar la previsión de nota
+const hasForecast = () => S.n >= MIN_FORECAST;
 
 function readiness() {
   const all = estimate();
@@ -137,8 +148,8 @@ function readiness() {
   const last2 = S.sims.slice(-2);
   const lastSim = last2.length ? last2.reduce((a, x) => a + x.score, 0) / last2.length : null;
   const checks = [
-    { ok: all >= GOAL_ALL, label: `Nota estimada de ${pct(GOAL_ALL)}% o más`, info: S.n ? `ahora: ${pct(all)}%` : 'aún sin datos' },
-    { ok: temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Cada tema: ${pct(GOAL_COVER)}% visto y ${pct(GOAL_TEMA)}% de nota`, info: temas.map(t => `${t.corto}: ${pct(t.cov)}% visto, ${S.n ? pct(t.d) + '%' : '—'} nota`).join(' · ') },
+    { ok: hasForecast() && all >= GOAL_ALL, label: `Previsión de nota de ${pct(GOAL_ALL)}% o más`, info: hasForecast() ? `ahora: ${pct(all)}%` : `se calcula a partir de ${MIN_FORECAST} respuestas (llevas ${S.n})` },
+    { ok: hasForecast() && temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Responder al menos el ${pct(GOAL_COVER)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') },
     { ok: lastSim !== null && lastSim >= GOAL_SIM, label: `Simulacros con ${pct(GOAL_SIM)}% o más`, info: lastSim === null ? 'sin hacer' : S.sims.length > 1 ? `media de los 2 últimos: ${pct(lastSim)}%` : `último: ${pct(lastSim)}%` },
   ];
   return { all, temas, lastSim, checks, ready: checks.every(c => c.ok) };
@@ -249,10 +260,10 @@ function homeMessage(r) {
   const simFailed = S.sims.length && S.sims.at(-1).score < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN && failedIds().length > 0;
   if (simFailed) return `En el simulacro sacaste un <b>${pct(S.sims.at(-1).score)}%</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo 💪`;
   const covered = r.temas.every(t => t.cov >= GOAL_COVER);
-  if (r.all >= GOAL_ALL && covered && r.lastSim === null) return `¡Tu nota estimada es de un <b>${pct(r.all)}%</b>! Es el momento de hacer un <b>simulacro de examen</b>.`;
+  if (r.all >= GOAL_ALL && covered && r.lastSim === null) return `¡Tu previsión de nota es de un <b>${pct(r.all)}%</b>! Es el momento de hacer un <b>simulacro de examen</b>.`;
   if (r.all >= GOAL_ALL && !covered) return `Lo que has visto lo llevas genial (<b>${pct(r.all)}%</b>). Sigue estudiando para cubrir más temario.`;
   if (failed >= 8) return `Tienes <b>${failed}</b> preguntas falladas pendientes. Si sigues estudiando te las iré repitiendo hasta que salgan solas.`;
-  if (r.all < 0.3) return `Vamos poco a poco. Pulsa <b>Seguir estudiando</b> y yo elijo las preguntas que más te convienen.`;
+  if (!hasForecast() || r.all < 0.3) return `Vamos poco a poco. Pulsa <b>Seguir estudiando</b> y yo elijo las preguntas que más te convienen.`;
   return rand([`¡Vas muy bien! Si el examen fuera ahora, calculo que sacarías un <b>${pct(r.all)}%</b>.`, `Cada pregunta cuenta. ¡Sigue así, ${NAME}! 💪`]);
 }
 
@@ -321,18 +332,20 @@ function showOnboarding(i = 0) {
 // ---------- Inicio ----------
 function showHome() {
   const r = readiness();
+  const all = qStats();
   const failed = failedIds().length;
   const checks = r.checks.map(c => `<li class="${c.ok ? 'done' : ''}"><span class="ck">${c.ok ? '✓' : ''}</span><span>${c.label}<br><span class="muted small">${c.info}</span></span></li>`).join('');
   const temas = r.temas.map(t => {
+    const qs = qStats({ tema: t.id });
     const total = conceptIds({ tema: t.id }).length;
     const seen = seenCount({ tema: t.id });
     return `
       <div class="card tema" data-tema="${t.id}">
         <div class="head">
           <div class="emoji">${t.emoji}</div>
-          <div><div class="name">${esc(t.nombre)}</div><div class="meta">${esc(t.corto)} · ${DATA.preguntas.filter(p => p.tema === t.id).length} preguntas · ${pct(t.cov)}% visto</div></div>
+          <div><div class="name">${esc(t.nombre)}</div><div class="meta">${esc(t.corto)} · ${qs.ok} bien de ${qs.total} · ${qs.seen} respondidas</div></div>
         </div>
-        <div class="bar-row"><div class="bar ${t.d < 0.6 ? 'warn' : ''}"><i style="width:${S.n ? pct(t.d) : 0}%"></i></div><span class="pct">${S.n ? pct(t.d) + '%' : '—'}</span></div>
+        <div class="bar-row"><div class="bar"><i style="width:${pct(qs.pOk)}%"></i></div><span class="pct">${pct(qs.pOk)}%</span></div>
       </div>`;
   }).join('');
 
@@ -354,9 +367,10 @@ function showHome() {
 
       <div class="card">
         <div class="ready-card">
-          <div class="ring" style="--p:${S.n ? pct(r.all) : 0}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${S.n ? pct(r.all) + '%' : '—'}</b><span>nota est.</span></div></div>
+          <div class="ring" style="--p:${pct(all.pOk)}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${pct(all.pOk)}%</b><span>dominado</span></div></div>
           <div>
             <h3>${r.ready ? '¡Lista para el examen! 🎉' : 'Preparación para el examen'}</h3>
+            <p class="muted small" style="font-weight:700;margin-top:2px">${all.ok} de ${all.total} preguntas bien · ${all.seen} respondidas${hasForecast() ? ` · previsión de nota: <b>${pct(r.all)}%</b>` : ''}</p>
             <ul class="checks">${checks}</ul>
           </div>
         </div>
@@ -423,7 +437,7 @@ function confirmSim() {
   modal(`
     <h2>📝 Simulacro de examen</h2>
     <p>${SIM_LEN} preguntas de todo el temario. <b>No verás si aciertas hasta el final</b>, como en el examen de verdad.</p>
-    ${r.all < 0.6 ? `<p class="muted">Consejo de KAI: rinde más cuando tu nota estimada pase del 60% (ahora: ${pct(r.all)}%). Pero puedes hacerlo cuando quieras.</p>` : ''}
+    ${!hasForecast() || r.all < 0.6 ? `<p class="muted">Consejo de KAI: rinde más cuando tu previsión de nota pase del 60%${hasForecast() ? ` (ahora: ${pct(r.all)}%)` : ''}. Pero puedes hacerlo cuando quieras.</p>` : ''}
     <button class="btn accent" data-a="go">Empezar simulacro</button>
     <button class="btn ghost" data-a="close">Ahora no</button>`, (el, close) => {
     el.querySelector('[data-a=go]').onclick = () => { close(); startSession('sim'); };
@@ -435,20 +449,20 @@ function confirmSim() {
 function showProgress() {
   const blocks = DATA.temas.map(t => {
     const rows = sections(t.id).map(sec => {
-      const d = estimate({ sec });
-      const total = conceptIds({ sec }).length;
-      const m = seenCount({ sec });
+      const q = qStats({ sec });
       return `<div class="sec-row" data-sec="${esc(sec)}">
-        <div class="t">${esc(secName(sec))} <span>${pct(d)}% · ${m}/${total} vistos</span></div>
-        <div class="bar ${d < 0.6 ? 'warn' : ''}"><i style="width:${pct(d)}%"></i></div>
+        <div class="t">${esc(secName(sec))} <span>${pct(q.pOk)}%</span></div>
+        <div class="bar"><i style="width:${pct(q.pOk)}%"></i></div>
+        <div class="sec-nums"><span>✅ ${q.ok} bien</span><span>❌ ${q.ko} mal</span><span>⏳ ${q.total - q.seen} sin ver</span><span>de ${q.total}</span></div>
       </div>`;
     }).join('');
-    return `<div class="card"><h3>${t.emoji} ${esc(t.nombre)}</h3><p class="muted small" style="margin:4px 0 6px">${esc(t.fuente || '')}</p>${rows}</div>`;
+    const tq = qStats({ tema: t.id });
+    return `<div class="card"><h3>${t.emoji} ${esc(t.nombre)}</h3><p class="muted small" style="margin:4px 0 6px">${esc(t.fuente || '')} · <b>${tq.ok}/${tq.total} bien (${pct(tq.pOk)}%)</b></p>${rows}</div>`;
   }).join('');
   render(`
     <div class="screen">
       <div class="topbar"><button class="icon-btn" id="back" aria-label="Volver">←</button><h2>Mi progreso</h2><span style="width:42px"></span></div>
-      <p class="muted">La barra es tu nota estimada en cada apartado. Una pregunta cuenta como sabida si la aciertas a la primera, o ${MASTERY_STREAK} veces seguidas después de fallarla. Toca un apartado para practicarlo.</p>
+      <p class="muted">El porcentaje es exacto: preguntas que tienes <b>bien</b> (la última vez que te salieron, las acertaste) sobre el total del apartado. Toca un apartado para practicarlo.</p>
       ${blocks}
     </div>`);
   app.querySelector('#back').onclick = showHome;
@@ -716,7 +730,7 @@ function showResults() {
   const okN = items.filter(it => it.ok).length;
   const score = items.length ? okN / items.length : 0;
   const newlyMastered = conceptIds().filter(id => mastered(id) && !sess.startMastered.has(id)).length;
-  const domNow = estimate();
+  const domNow = qStats().pOk;
 
   if (sess.type === 'diag') {
     S.diag = { date: Date.now(), score };
@@ -787,7 +801,7 @@ function showResults() {
       <div class="stats">
         <div class="stat"><b>${pct(score)}%</b><span>aciertos</span></div>
         <div class="stat"><b>+${newlyMastered}</b><span>nuevas sabidas</span></div>
-        <div class="stat"><b>${pct(domNow)}%</b><span>nota est.</span></div>
+        <div class="stat"><b>${pct(domNow)}%</b><span>dominado</span></div>
       </div>
       <div class="btn-col">
         <button class="btn" id="again">${again}</button>
@@ -816,7 +830,7 @@ function showReady() {
       <div class="kai-big">${kaiSVG()}</div>
       <div class="bubble">
         <p style="font-size:24px"><b>¡Estás lista, ${NAME}!</b> 🎉</p>
-        <p>Tu nota estimada es de un <b>${pct(r.all)}%</b> y en los simulacros vas con un <b>${pct(r.lastSim)}%</b>.</p>
+        <p>Tu previsión de nota es de un <b>${pct(r.all)}%</b> y en los simulacros vas con un <b>${pct(r.lastSim)}%</b>.</p>
         <p>Ya puedes dejar de estudiar e ir al examen tranquila. ¡Vas a bordarlo!</p>
         <p>${CREATOR} y yo estamos muy orgullosos de ti 💙</p>
       </div>
