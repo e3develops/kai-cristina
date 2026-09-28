@@ -30,8 +30,8 @@ y abrir http://localhost:5173
 
 ## Cómo decide KAI
 
-- **Concepto dominado**: acertado 2 veces seguidas. Un fallo lo vuelve a sacar a las ~3 preguntas.
-- **Contenido nuevo**: se prioriza el de los apartados con peor porcentaje de aciertos.
-- **Nota estimada**: media de la probabilidad de acierto de cada concepto (visto o estimado por su apartado).
+- **Prioridad en la práctica**: fallos recientes (vuelven a las ~4 preguntas) → fallos recuperados por confirmar (~6) → preguntas nuevas de los apartados más flojos y grandes. Tras un repaso siempre va una nueva.
+- **"Bien" (progreso)**: la última vez que salió la pregunta, se acertó. Un fallo recuperado necesita 2 aciertos seguidos para darse por confirmado.
+- **Previsión de nota**: media de la probabilidad de acierto de cada concepto (lo no visto se estima por lo acertado a la primera en su apartado). Se muestra a partir de 20 respuestas.
 - **"¡Estás lista!"**: previsión de nota ≥ 82 %, cada tema con ≥ 80 % de sus preguntas respondidas y ≥ 70 % de previsión, y media de los 2 últimos simulacros ≥ 80 %.
 - El progreso se guarda en el navegador del dispositivo (localStorage).
