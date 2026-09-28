@@ -7,7 +7,7 @@ import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4
 const NAME = 'Cristina';
 const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
-const VERSION = '28/09 20:22'; // se muestra al pie para comprobar qué versión se está usando
+const VERSION = '28/09 20:32'; // se muestra al pie para comprobar qué versión se está usando
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
@@ -68,7 +68,7 @@ const stat = id => S.c[id];
 
 function conceptIds(filter = {}) {
   return Object.values(CONCEPTS)
-    .filter(c => (!filter.tema || c.tema === filter.tema) && (!filter.sec || c.sec === filter.sec))
+    .filter(c => (!filter.tema || c.tema === filter.tema) && (!filter.sec || c.sec === filter.sec) && (!filter.pag || c.pags.has(filter.pag)))
     .map(c => c.id);
 }
 function seenCount(filter = {}) {
@@ -78,6 +78,7 @@ function failedIds(filter = {}) {
   return conceptIds(filter).filter(id => stat(id)?.lastOk === false);
 }
 const secKey = q => `${q.tema}|${q.seccion}`;
+const pagKey = q => `${q.tema}-${q.pagina}`;
 const secName = key => key.slice(key.indexOf('|') + 1);
 // Claves de apartado (tema|sección) en orden de aparición
 function sections(tema) {
@@ -134,6 +135,7 @@ function qStats(filter = {}) {
   for (const p of DATA.preguntas) {
     if (filter.tema && p.tema !== filter.tema) continue;
     if (filter.sec && secKey(p) !== filter.sec) continue;
+    if (filter.pag && pagKey(p) !== filter.pag) continue;
     total++;
     const s = S.q[p.id];
     if (s && s.seen) { seen++; if (s.lastOk) ok++; else ko++; }
@@ -238,7 +240,10 @@ function pickWeakSection(ids) {
   return rand(bySec[secs[secs.length - 1]]);
 }
 function pickQuestion(cid, avoid) {
-  const qs = shuffle(CONCEPTS[cid].qs).sort((a, b) => (S.q[a]?.seen || 0) - (S.q[b]?.seen || 0));
+  let qs = shuffle(CONCEPTS[cid].qs).sort((a, b) => (S.q[a]?.seen || 0) - (S.q[b]?.seen || 0));
+  // Practicando una página concreta: preferir las preguntas de esa página
+  const pg = sess?.filter?.pag;
+  if (pg) { const on = qs.filter(id => pagKey(Q[id]) === pg); if (on.length) qs = on; }
   return qs.find(id => id !== avoid) || qs[0];
 }
 
@@ -470,7 +475,7 @@ function showHome() {
       <div class="grid2">
         <button class="tile ${lock}" id="fallos" ${failed || !S.diag ? '' : 'disabled'}><span class="ic">🔁</span><b>Repasar fallos${failed ? `<span class="badge">${failed}</span>` : ''}</b><span>Solo lo que has fallado</span></button>
         <button class="tile ${lock}" id="sim"><span class="ic">📝</span><b>Simulacro</b><span>${SIM_LEN} preguntas tipo examen, sin ayudas</span></button>
-        <button class="tile" id="progress"><span class="ic">📊</span><b>Mi progreso</b><span>Por temas y apartados</span></button>
+        <button class="tile" id="progress"><span class="ic">📚</span><b>Temario</b><span>Progreso y apuntes</span></button>
         <button class="tile" id="diag2"><span class="ic">🩺</span><b>Diagnóstico</b><span>${S.diag ? `Último: ${pct(S.diag.score)}%` : 'Ver qué sabes ya'}</span></button>
       </div>
 
@@ -532,7 +537,64 @@ function confirmSim() {
 }
 
 // ---------- Progreso ----------
-function showProgress() {
+let temarioTab = 'progreso';
+let DOCS = null;
+async function loadDocs() {
+  if (DOCS) return DOCS;
+  try { DOCS = await (await fetch('data/documentos.json', { cache: 'no-cache' })).json(); } catch (e) { DOCS = []; }
+  return DOCS;
+}
+const showProgress = () => showTemario(temarioTab);
+async function showTemario(tab = 'progreso') {
+  temarioTab = tab;
+  const body = tab === 'apuntes' ? await apuntesHTML() : progresoHTML();
+  render(`
+    <div class="screen">
+      <div class="topbar"><button class="icon-btn" id="back" aria-label="Volver">←</button><h2>Temario</h2><span style="width:44px;flex:0 0 44px"></span></div>
+      <div class="seg" role="tablist">
+        <button role="tab" data-tab="progreso" class="${tab === 'progreso' ? 'on' : ''}">📊 Progreso</button>
+        <button role="tab" data-tab="apuntes" class="${tab === 'apuntes' ? 'on' : ''}">📚 Apuntes</button>
+      </div>
+      ${body}
+    </div>`);
+  app.querySelector('#back').onclick = showHome;
+  app.querySelectorAll('.seg [data-tab]').forEach(b => b.addEventListener('click', () => b.dataset.tab !== temarioTab && showTemario(b.dataset.tab)));
+  app.querySelectorAll('.sec-row').forEach(el => el.addEventListener('click', () => startSession('practice', { sec: el.dataset.sec })));
+  app.querySelectorAll('.pg').forEach(el => el.addEventListener('click', () => openPage(el.dataset.tema, Number(el.dataset.pag))));
+}
+// Documentos subidos: páginas con sus preguntas, y aviso de páginas que faltan
+async function apuntesHTML() {
+  const docs = await loadDocs();
+  const totalPags = docs.reduce((a, d) => a + d.paginas.length, 0);
+  const cards = docs.map(d => {
+    const t = DATA.temas.find(x => x.id === d.tema);
+    const nq = DATA.preguntas.filter(p => p.tema === d.tema).length;
+    const pages = d.paginas.map(pg => {
+      const q = qStats({ pag: `${d.tema}-${pg}` });
+      const cls = q.total === 0 ? 'none' : q.total < 5 ? 'few' : 'ok';
+      return `<button class="pg" data-tema="${esc(d.tema)}" data-pag="${pg}" aria-label="Página ${pg}, ${q.total} preguntas">
+        <img src="paginas/mini/${esc(d.tema)}-${pg}.jpg" alt="" loading="lazy">
+        <span class="pg-n">pág. ${pg}</span>
+        <span class="pg-q ${cls}">${q.total ? `${q.total}&nbsp;preg.` : 'sin preg.'}</span>
+        <i class="pg-bar"><i style="width:${pct(q.pOk)}%"></i></i>
+      </button>`;
+    }).join('');
+    const faltan = d.faltan?.length
+      ? `<div class="doc-warn">⚠️ ${d.faltan.length === 1 ? `Falta la <b>pág. ${d.faltan[0]}</b>` : `Faltan las <b>págs. ${d.faltan.join(', ')}</b>`} dentro de este documento. Si tiene contenido de examen, habría que subirla.</div>`
+      : `<div class="doc-ok">✅ Páginas completas, sin huecos <span style="white-space:nowrap">(págs. ${d.paginas[0]}–${d.paginas.at(-1)})</span>.</div>`;
+    return `<div class="card doc">
+      <h3>${t?.emoji || '📄'} ${esc(t?.nombre || d.titulo)}</h3>
+      <p class="muted small">${esc(d.titulo)} · ${esc(d.origen)}<br><b>${d.paginas.length} páginas · ${nq} preguntas</b></p>
+      ${faltan}
+      <div class="pg-grid">${pages}</div>
+    </div>`;
+  }).join('');
+  return `
+    <p class="muted">Los documentos con los que KAI hace las preguntas: <b>${docs.length} documentos · ${totalPags} páginas · ${DATA.preguntas.length} preguntas</b>. Toca una página para verla entera y practicar solo esa página.</p>
+    <div class="pg-legend"><span><i class="ok"></i>5 o más preguntas</span><span><i class="few"></i>menos de 5</span><span><i class="none"></i>sin preguntas</span></div>
+    ${cards}`;
+}
+function progresoHTML() {
   const blocks = DATA.temas.map(t => {
     const rows = sections(t.id).map(sec => {
       const q = qStats({ sec });
@@ -545,14 +607,9 @@ function showProgress() {
     const tq = qStats({ tema: t.id });
     return `<div class="card"><h3>${t.emoji} ${esc(t.nombre)}</h3><p class="muted small" style="margin:4px 0 6px">${esc(t.fuente || '')} · <b>${tq.ok}/${tq.total} bien (${pct(tq.pOk)}%)</b></p>${rows}</div>`;
   }).join('');
-  render(`
-    <div class="screen">
-      <div class="topbar"><button class="icon-btn" id="back" aria-label="Volver">←</button><h2>Mi progreso</h2><span style="width:44px;flex:0 0 44px"></span></div>
+  return `
       <p class="muted">El porcentaje es exacto: preguntas que tienes <b>bien</b> (la última vez que te salieron, las acertaste) sobre el total del apartado. Toca un apartado para practicarlo.</p>
-      ${blocks}
-    </div>`);
-  app.querySelector('#back').onclick = showHome;
-  app.querySelectorAll('.sec-row').forEach(el => el.addEventListener('click', () => startSession('practice', { sec: el.dataset.sec })));
+      ${blocks}`;
 }
 
 // ---------- Sesión de test ----------
@@ -665,7 +722,7 @@ function renderQuestion() {
         <div class="bar"><i style="width:${pct(sess.i / sess.len)}%"></i></div>
         <span class="count">${sess.i + 1}/${sess.len}</span>
       </div>
-      <div class="muted small" style="font-weight:800">${labels[sess.type]}${sess.filter?.tema ? ' · ' + esc(DATA.temas.find(t => t.id === sess.filter.tema)?.corto || '') : ''}${sess.filter?.sec ? ' · ' + esc(DATA.temas.find(t => sess.filter.sec.startsWith(t.id + '|'))?.corto || '') + ' · ' + esc(secName(sess.filter.sec)) : ''}</div>
+      <div class="muted small" style="font-weight:800">${labels[sess.type]}${sess.filter?.tema ? ' · ' + esc(DATA.temas.find(t => t.id === sess.filter.tema)?.corto || '') : ''}${sess.filter?.sec ? ' · ' + esc(DATA.temas.find(t => sess.filter.sec.startsWith(t.id + '|'))?.corto || '') + ' · ' + esc(secName(sess.filter.sec)) : ''}${sess.filter?.pag ? ' · ' + esc(DATA.temas.find(t => sess.filter.pag.startsWith(t.id + '-'))?.corto || '') + ' · pág. ' + esc(sess.filter.pag.split('-').pop()) : ''}</div>
       <div class="qmeta">${chips}</div>
       <div class="question">${esc(q.pregunta)}</div>
       <div class="options">${opts}</div>
@@ -783,20 +840,41 @@ async function openBook(qid) {
   const rects = hl.rects || [];
   const pag = (img.match(/-(\d+)\.jpg$/) || [])[1] || q.pagina;
   const t = DATA.temas.find(x => x.id === q.tema);
-
+  openViewer({
+    img, rects,
+    title: `${t ? t.corto : ''} · pág. ${pag}`,
+    sub: `${rects.length ? 'Subrayado en amarillo' : 'La frase está en esta página'} · pellizca para hacer zoom`,
+    footer: `📖&nbsp;${fmtQuote(q.fuente)}`,
+  });
+}
+function openPage(tema, pagina) {
+  if (viewerEl) return;
+  const t = DATA.temas.find(x => x.id === tema);
+  const key = `${tema}-${pagina}`;
+  const n = qStats({ pag: key }).total;
+  openViewer({
+    img: `paginas/${key}.jpg`, rects: [],
+    title: `${t ? t.corto : ''} · pág. ${pagina}`,
+    sub: `${n} ${n === 1 ? 'pregunta' : 'preguntas'} · pellizca para hacer zoom`,
+    footer: n ? `<button class="btn" data-a="practice">🎯 Practicar esta página (${n})</button>` : `<p class="muted small" style="margin:0">Esta página no tiene preguntas.</p>`,
+    onPractice: () => { closeBook(); setTimeout(() => startSession('practice', { pag: key }), 150); },
+  });
+}
+function openViewer({ img, rects, title, sub, footer, onPractice }) {
   viewerEl = document.createElement('div');
   viewerEl.className = 'viewer';
   viewerEl.innerHTML = `
     <div class="v-top">
-      <button class="v-back" data-a="close" aria-label="Volver al test">← Volver</button>
-      <div class="v-title"><b>${esc(t ? t.corto : '')} · pág. ${esc(pag)}</b><span>${rects.length ? 'Subrayado en amarillo' : 'La frase está en esta página'} · pellizca para hacer zoom</span></div>
+      <button class="v-back" data-a="close" aria-label="Volver">← Volver</button>
+      <div class="v-title"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
       <div class="v-zoom"><button class="icon-btn" data-a="out" aria-label="Alejar">−</button><button class="icon-btn" data-a="in" aria-label="Acercar">+</button></div>
     </div>
     <div class="v-scroll"><div class="v-page">
-      <img src="${esc(img)}" alt="Página ${esc(pag)} del libro" decoding="sync">
+      <img src="${esc(img)}" alt="Página del libro" decoding="sync">
       ${rects.map(([x, y, w, h]) => `<i class="v-hl" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"></i>`).join('')}
     </div></div>
-    <div class="v-quote">📖&nbsp;${fmtQuote(q.fuente)}</div>`;
+    <div class="v-quote">${footer}</div>`;
+  if (onPractice) viewerEl.querySelector('[data-a=practice]')?.addEventListener('click', onPractice);
   document.body.appendChild(viewerEl);
   lockScroll();
   guardTaps(viewerEl);
@@ -1076,7 +1154,9 @@ async function init() {
   }
   for (const p of DATA.preguntas) {
     Q[p.id] = p;
-    (CONCEPTS[p.concepto] ||= { id: p.concepto, tema: p.tema, seccion: p.seccion, sec: secKey(p), qs: [] }).qs.push(p.id);
+    const c = (CONCEPTS[p.concepto] ||= { id: p.concepto, tema: p.tema, seccion: p.seccion, sec: secKey(p), qs: [], pags: new Set() });
+    c.qs.push(p.id);
+    c.pags.add(pagKey(p));
   }
   S = load();
   pauseCurrent();

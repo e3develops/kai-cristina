@@ -2,7 +2,7 @@
 // para recibir siempre las preguntas nuevas, y caché como respaldo.
 const CACHE = 'kai-v4';
 const CORE = [
-  './', 'index.html', 'css/styles.css', 'css/kai.css', 'js/kaifun.js', 'js/app.js', 'js/kai.js', 'js/install.js', 'js/installart.js', 'data/preguntas.json',
+  './', 'index.html', 'css/styles.css', 'css/kai.css', 'js/kaifun.js', 'js/app.js', 'js/kai.js', 'js/install.js', 'js/installart.js', 'data/preguntas.json', 'data/documentos.json',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 

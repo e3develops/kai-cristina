@@ -19,6 +19,7 @@ Todas las preguntas salen literalmente de los apuntes; cada una guarda la cita y
    `id, tema, seccion, concepto, pregunta, opciones[4], correcta (0-3), fuente (cita literal), pagina`.
 2. Si es un tema nuevo, añadirlo a `TEMAS` en `tools/build_preguntas.py`.
 3. `python tools/build_preguntas.py`
+4. Si hay páginas nuevas en `paginas/`: `python tools/build_documentos.py` (índice de apuntes, miniaturas y aviso de páginas que faltan).
 
 ## Probar en local
 
