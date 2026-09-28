@@ -278,3 +278,6 @@ p { margin: 0; line-height: 1.5; }
 @media (min-width: 700px) {
   .kai-row .kai-wrap { width: 120px; flex-basis: 120px; }
 }
+
+.tile .badge { color: #fff; font-size: 11px; }
+.resume { display: flex; flex-direction: column; gap: 12px; border: 2px solid var(--accent); background: var(--accent-soft); }

@@ -9,9 +9,9 @@ const STORE = 'kai-cristina-v1';
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
-const GOAL_ALL = 0.85;    // nota estimada global para estar lista
-const GOAL_TEMA = 0.75;   // nota estimada mínima en cada tema
-const GOAL_COVER = 0.5;   // parte de cada tema que hay que haber trabajado
+const GOAL_ALL = 0.80;    // nota estimada global para estar lista
+const GOAL_TEMA = 0.70;   // nota estimada mínima en cada tema
+const GOAL_COVER = 0.3;   // parte de cada tema que hay que haber trabajado
 const GOAL_SIM = 0.80;    // nota mínima en el último simulacro
 const MASTERY_STREAK = 2; // aciertos seguidos para dominar un concepto
 
@@ -62,7 +62,6 @@ function save() {
 // Modelo de aprendizaje
 // ------------------------------------------------------------------
 const stat = id => S.c[id];
-const mastered = id => (S.c[id]?.streak || 0) >= MASTERY_STREAK;
 
 function conceptIds(filter = {}) {
   return Object.values(CONCEPTS)
@@ -88,20 +87,31 @@ function sections(tema) {
   }
   return out;
 }
-// Debilidad de un apartado: proporción (suavizada) de sus conceptos cuyo último intento fue fallo
-function weakness(sec) {
-  let ok = 0, ko = 0;
-  for (const id of conceptIds({ sec })) { const s = stat(id); if (s) { if (s.lastOk) ok++; else ko++; } }
-  return 1 - (ok + 1) / (ok + ko + 2);
+// Conocimiento previo de un apartado: % de aciertos a la PRIMERA en sus conceptos
+// (suavizado hacia la media global; sin datos → 50%)
+function priorAcc(sec) {
+  let gOk = 0, gN = 0, ok = 0, n = 0;
+  for (const id in S.c) {
+    const s = S.c[id];
+    if (s.first == null || !CONCEPTS[id]) continue;
+    gN++; if (s.first) gOk++;
+    if (CONCEPTS[id].sec === sec) { n++; if (s.first) ok++; }
+  }
+  const g = (gOk + 1) / (gN + 2);
+  return (ok + 3 * g) / (n + 3);
 }
+const weakness = sec => 1 - priorAcc(sec);
+// Sabida: acertada a la primera y nunca fallada, o 2+ aciertos seguidos tras fallarla
+const known = id => { const s = S.c[id]; return !!s && (s.streak >= MASTERY_STREAK || (s.ko === 0 && s.ok > 0)); };
+const mastered = known;
 
 // Probabilidad estimada de acertar un concepto en el examen
 function conceptP(id) {
   const s = stat(id);
-  if (!s) return 0.9 * (1 - weakness(CONCEPTS[id].sec)); // no visto: se estima por su apartado
-  if (s.streak >= MASTERY_STREAK) return 0.95;
-  if (s.streak === 1) return 0.8;
-  return s.ok ? 0.45 : 0.3; // último intento fallado
+  if (!s) return priorAcc(CONCEPTS[id].sec); // no visto: se estima por lo que sabe de su apartado
+  if (!s.lastOk) return 0.35;                 // último intento fallado
+  if (s.streak >= MASTERY_STREAK) return 0.92;
+  return s.ko === 0 ? 0.85 : 0.7;             // a la primera / recuperada una vez
 }
 // Nota estimada (0-1) si el examen fuera ahora mismo
 function estimate(filter = {}) {
@@ -118,8 +128,8 @@ function readiness() {
   const temas = DATA.temas.map(t => ({ ...t, d: estimate({ tema: t.id }), cov: coverage({ tema: t.id }) }));
   const lastSim = S.sims.length ? S.sims[S.sims.length - 1].score : null;
   const checks = [
-    { ok: all >= GOAL_ALL, label: `Nota estimada de ${pct(GOAL_ALL)}% o más`, info: `ahora: ${pct(all)}%` },
-    { ok: temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Todos los temas trabajados (${pct(GOAL_COVER)}% visto y ${pct(GOAL_TEMA)}% de nota)`, info: temas.map(t => `${t.corto}: ${pct(t.cov)}% visto`).join(' · ') },
+    { ok: all >= GOAL_ALL, label: `Nota estimada de ${pct(GOAL_ALL)}% o más`, info: S.n ? `ahora: ${pct(all)}%` : 'aún sin datos' },
+    { ok: temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Haber trabajado cada tema (${pct(GOAL_COVER)}% visto)`, info: temas.map(t => `${t.corto}: ${pct(t.cov)}%`).join(' · ') },
     { ok: lastSim !== null && lastSim >= GOAL_SIM, label: `Aprobar un simulacro con ${pct(GOAL_SIM)}% o más`, info: lastSim === null ? 'sin hacer' : `último: ${pct(lastSim)}%` },
   ];
   return { all, temas, lastSim, checks, ready: checks.every(c => c.ok) };
@@ -128,19 +138,21 @@ function readiness() {
 function record(qid, ok) {
   const q = Q[qid];
   S.n++;
-  const c = S.c[q.concepto] || (S.c[q.concepto] = { seen: 0, ok: 0, ko: 0, streak: 0, due: 0, last: -1, lastOk: null });
+  const c = S.c[q.concepto] || (S.c[q.concepto] = { seen: 0, ok: 0, ko: 0, streak: 0, due: 0, last: -1, lastOk: null, first: null });
+  if (c.first == null) c.first = ok;
   c.seen++;
   c.last = S.n;
   c.lastOk = ok;
   if (ok) {
     c.ok++;
     c.streak++;
-    const gap = c.streak === 1 ? (c.ko ? 5 : 10) : [0, 0, 20, 50, 120][Math.min(c.streak, 4)];
+    // A la primera: ya la sabe, repaso muy lejano. Recuperando un fallo: vuelve pronto para confirmar.
+    const gap = c.ko === 0 ? 150 : [0, 6, 40, 120][Math.min(c.streak, 3)];
     c.due = S.n + gap;
   } else {
     c.ko++;
     c.streak = 0;
-    c.due = S.n + 3; // vuelve enseguida
+    c.due = S.n + 4; // vuelve enseguida
   }
   const s = S.q[qid] || (S.q[qid] = { seen: 0, ok: 0 });
   s.seen++;
@@ -150,28 +162,31 @@ function record(qid, ok) {
 }
 
 // Elige el siguiente concepto a preguntar (repetición espaciada sencilla)
-function pickConcept(pool, recent) {
+function pickConcept(pool, recent, preferNew = false) {
   let cands = pool.filter(id => !recent.includes(id));
   if (!cands.length) cands = pool;
   const n = S.n;
+  const due = id => stat(id) && stat(id).due <= n;
+  const byDue = (a, b) => stat(a).due - stat(b).due;
 
-  // 1) Fallos o aprendizajes pendientes que ya "tocan"
-  const overdue = cands.filter(id => stat(id) && stat(id).streak < MASTERY_STREAK && stat(id).due <= n);
-  if (overdue.length) {
-    overdue.sort((a, b) => stat(a).due - stat(b).due || stat(b).ko - stat(a).ko);
-    return overdue[0];
-  }
-  // 2) Contenido nuevo, priorizando secciones flojas
+  // Intercalar: tras un repaso, si queda temario sin ver, toca una nueva
+  const fresh = cands.filter(id => !stat(id));
+  if (preferNew && fresh.length) return pickWeakSection(fresh);
+
+  // 1) Fallos que ya tocan (siempre primero)
+  const failed = cands.filter(id => due(id) && !stat(id).lastOk).sort(byDue);
+  if (failed.length) return failed[0];
+  // 2) Fallos recuperados que hay que confirmar
+  const confirming = cands.filter(id => due(id) && stat(id).ko > 0 && stat(id).streak < MASTERY_STREAK).sort(byDue);
+  if (confirming.length) return confirming[0];
+  // 3) Contenido nuevo, priorizando los apartados más flojos (con algún repaso suelto)
   const unseen = cands.filter(id => !stat(id));
-  const learning = cands.filter(id => stat(id) && stat(id).streak < MASTERY_STREAK);
-  if (unseen.length && !(learning.length && Math.random() < 0.2)) return pickWeakSection(unseen);
-  // 3) Lo que aún se está aprendiendo
-  if (learning.length) {
-    learning.sort((a, b) => stat(a).due - stat(b).due);
-    return learning[0];
-  }
-  // 4) Repaso de lo dominado
-  return cands.slice().sort((a, b) => stat(a).due - stat(b).due)[0];
+  const reviews = cands.filter(due).sort(byDue);
+  if (unseen.length && !(reviews.length && Math.random() < 0.1)) return pickWeakSection(unseen);
+  // 4) Repasos pendientes
+  if (reviews.length) return reviews[0];
+  // 5) Todo visto y nada pendiente: lo que antes toque
+  return cands.filter(id => stat(id)).sort(byDue)[0] || cands[0];
 }
 function pickWeakSection(ids) {
   const bySec = {};
@@ -219,7 +234,11 @@ function homeMessage(r) {
   const failed = failedIds().length;
   if (!S.diag) return `Te propongo empezar con un <b>diagnóstico</b> de ${DIAG_LEN} preguntas para ver qué sabes ya. ¡Sin presión!`;
   if (r.ready) return `¡Estás <b>lista</b>, ${NAME}! 🎉 Si quieres, sigue repasando un poquito para afianzar.`;
-  if (r.all >= 0.6 && (r.lastSim === null || r.lastSim < GOAL_SIM)) return `¡Tu nota estimada ya es de un <b>${pct(r.all)}%</b>! Cuando quieras, prueba un <b>simulacro de examen</b>.`;
+  const simFailed = r.lastSim !== null && r.lastSim < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN;
+  if (simFailed) return `En el simulacro sacaste un <b>${pct(r.lastSim)}%</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo 💪`;
+  const covered = r.checks[1].ok;
+  if (r.all >= GOAL_ALL && covered && r.lastSim === null) return `¡Tu nota estimada es de un <b>${pct(r.all)}%</b>! Es el momento de hacer un <b>simulacro de examen</b>.`;
+  if (r.all >= GOAL_ALL && !covered) return `Lo que has visto lo llevas genial (<b>${pct(r.all)}%</b>). Sigue estudiando para cubrir más temario.`;
   if (failed >= 8) return `Tienes <b>${failed}</b> preguntas falladas pendientes. Si sigues estudiando te las iré repitiendo hasta que salgan solas.`;
   if (r.all < 0.3) return `Vamos poco a poco. Pulsa <b>Seguir estudiando</b> y yo elijo las preguntas que más te convienen.`;
   return rand([`¡Vas muy bien! Si el examen fuera ahora, calculo que sacarías un <b>${pct(r.all)}%</b>.`, `Cada pregunta cuenta. ¡Sigue así, ${NAME}! 💪`]);
@@ -250,14 +269,16 @@ function onboardingSteps() {
   return [
     { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>! 👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
     { mood: 'talk', html: `<p><b>${CREATOR}</b> me ha creado para ayudarte con tus estudios de enfermería.</p><p>Me ha pedido que te cuide mucho 💙</p>` },
-    { mood: 'think', html: `<p>Me he leído tus apuntes de arriba abajo 📚</p><ul class="steps-list">${temas}</ul><p>Todas las preguntas salen <b>literalmente de tu libro</b>. No me invento nada.</p>` },
+    { mood: 'think', html: `<p>Me he leído tus apuntes de arriba abajo 📚</p><ul class="steps-list">${temas}</ul><p>Las respuestas correctas y las citas salen <b>literalmente de tu libro</b>. No me invento nada.</p>` },
     { mood: 'talk', html: `<p>Así vamos a trabajar:</p><ul class="steps-list">
         <li><span class="n">1</span><span><b>Diagnóstico:</b> una ronda rápida para ver qué sabes.</span></li>
         <li><span class="n">2</span><span><b>Práctica inteligente:</b> te pregunto más lo que fallas, hasta que lo domines.</span></li>
         <li><span class="n">3</span><span><b>Simulacro:</b> un examen de prueba para comprobar que estás lista.</span></li></ul>` },
     { mood: 'happy', html: `<p>Después de cada respuesta te enseño <b>la frase exacta del libro</b> y su página.</p><p>Así también aprendes de los fallos 😉</p>` },
     { mood: 'happy', html: `<p>Voy calculando tu <b>nota estimada</b>. Cuando llegue al <b>${pct(GOAL_ALL)}%</b>, hayas trabajado todos los temas y apruebes un simulacro, te diré:</p><p style="font-size:20px"><b>¡Estás lista!</b> 🎉</p><p>Y entonces podrás ir al examen tranquila.</p>` },
-    { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¿Empezamos con el diagnóstico?</p>`, last: true },
+    S.diag
+      ? { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¡Seguimos cuando quieras! 💪</p>`, last: true }
+      : { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¿Empezamos con el diagnóstico?</p>`, last: true },
   ];
 }
 function showOnboarding(i = 0) {
@@ -271,7 +292,9 @@ function showOnboarding(i = 0) {
       <div class="dots">${dots}</div>
       <div class="btn-col">
         ${st.last
-          ? `<button class="btn" id="go-diag">¡Vamos! 🚀</button><button class="btn ghost" id="go-home">Primero echo un vistazo</button>`
+          ? (S.diag
+              ? `<button class="btn" id="go-home">Volver al inicio</button><button class="btn ghost" id="prev">Atrás</button>`
+              : `<button class="btn" id="go-diag">¡Vamos! 🚀</button><button class="btn ghost" id="go-home">Primero echo un vistazo</button>`)
           : `<button class="btn" id="next">Siguiente</button>${i > 0 ? '<button class="btn ghost" id="prev">Atrás</button>' : '<button class="btn ghost" id="skip">Saltar presentación</button>'}`}
       </div>
     </div>`, st.mood);
@@ -295,9 +318,9 @@ function showHome() {
       <div class="card tema" data-tema="${t.id}">
         <div class="head">
           <div class="emoji">${t.emoji}</div>
-          <div><div class="name">${esc(t.nombre)}</div><div class="meta">${esc(t.corto)} · visto ${seen}/${total}</div></div>
+          <div><div class="name">${esc(t.nombre)}</div><div class="meta">${esc(t.corto)} · ${DATA.preguntas.filter(p => p.tema === t.id).length} preguntas · ${pct(t.cov)}% visto</div></div>
         </div>
-        <div class="bar-row"><div class="bar ${t.d < GOAL_TEMA ? 'warn' : ''}"><i style="width:${pct(t.d)}%"></i></div><span class="pct">${pct(t.d)}%</span></div>
+        <div class="bar-row"><div class="bar ${t.d < 0.6 ? 'warn' : ''}"><i style="width:${S.n ? pct(t.d) : 0}%"></i></div><span class="pct">${S.n ? pct(t.d) + '%' : '—'}</span></div>
       </div>`;
   }).join('');
 
@@ -327,6 +350,11 @@ function showHome() {
         </div>
       </div>
 
+      ${S.cur ? `<div class="card resume">
+        <div><b>Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias</b><br><span class="muted small">Vas por la pregunta ${Math.min(S.cur.i + 1, S.cur.len)} de ${S.cur.len}</span></div>
+        <div class="btn-col"><button class="btn accent" id="resume">Continuar</button><button class="btn ghost" id="discard">Descartar</button></div>
+      </div>` : ''}
+
       ${main}
 
       <div class="grid2">
@@ -342,6 +370,8 @@ function showHome() {
       <div class="footer">Hecho con 💙 por ${CREATOR} · KAI v1</div>
     </div>`, r.ready ? 'happy' : 'talk');
 
+  app.querySelector('#resume')?.addEventListener('click', resumeSession);
+  app.querySelector('#discard')?.addEventListener('click', () => { if (confirm('¿Descartar la ronda a medias? Lo ya respondido sigue contando para tu repaso.')) { S.cur = null; save(); showHome(); } });
   app.querySelector('#study')?.addEventListener('click', () => startSession('practice'));
   app.querySelector('#diag')?.addEventListener('click', () => startSession('diag'));
   app.querySelector('#diag2').addEventListener('click', () => startSession('diag'));
@@ -398,7 +428,7 @@ function showProgress() {
       const m = seenCount({ sec });
       return `<div class="sec-row" data-sec="${esc(sec)}">
         <div class="t">${esc(secName(sec))} <span>${pct(d)}% · ${m}/${total} vistos</span></div>
-        <div class="bar ${d < GOAL_TEMA ? 'warn' : ''}"><i style="width:${pct(d)}%"></i></div>
+        <div class="bar ${d < 0.6 ? 'warn' : ''}"><i style="width:${pct(d)}%"></i></div>
       </div>`;
     }).join('');
     return `<div class="card"><h3>${t.emoji} ${esc(t.nombre)}</h3><p class="muted small" style="margin:4px 0 6px">${esc(t.fuente || '')}</p>${rows}</div>`;
@@ -430,8 +460,26 @@ function startSession(type, filter = {}) {
   nextQuestion();
 }
 
+// Guarda la ronda en curso: si Safari cierra la pestaña, se puede continuar
+function persistSess() {
+  if (!sess) return;
+  const { type, filter, fixed, len, i, items, reins } = sess;
+  S.cur = { type, filter, fixed, len, i, items, reins, startMastered: [...sess.startMastered] };
+  save();
+}
+function resumeSession() {
+  const c = S.cur;
+  if (!c || !c.items?.length) { S.cur = null; save(); return showHome(); }
+  sess = { ...c, pool: conceptIds(c.filter || {}), recent: [], startMastered: new Set(c.startMastered || []) };
+  const it = sess.items[sess.i];
+  if (it && it.chosen !== null) sess.i++; // la última ya estaba respondida
+  try { history.pushState({ kai: 'quiz' }, ''); } catch (e) { /* sin historial */ }
+  nextQuestion();
+}
 function quitSession() {
   sess = null;
+  S.cur = null;
+  save();
   showHome();
 }
 // Botón/gesto "atrás" durante una ronda: preguntar antes de salir
@@ -444,16 +492,19 @@ window.addEventListener('popstate', () => {
 function nextQuestion() {
   if (!sess) return;
   if (sess.i >= sess.len) return showResults();
+  if (sess.items[sess.i] && sess.items[sess.i].chosen === null) return renderQuestion(); // continuar ronda guardada
   let qid;
   if (sess.fixed) qid = sess.fixed[sess.i];
   else {
-    const cid = pickConcept(sess.pool, sess.recent);
-    qid = pickQuestion(cid, sess.items.at(-1)?.qid);
+    const prevItem = sess.items[sess.i - 1];
+    const cid = pickConcept(sess.pool, sess.recent, !!prevItem && !prevItem.wasNew);
+    qid = pickQuestion(cid, prevItem?.qid);
   }
   const q = Q[qid];
   const prev = stat(q.concepto);
   sess.recent = [q.concepto, ...sess.recent].slice(0, Math.min(4, Math.max(1, sess.pool.length - 1)));
   sess.items[sess.i] = { qid, order: shuffle([0, 1, 2, 3]), chosen: null, ok: null, wasNew: !prev, wasFailed: prev?.lastOk === false };
+  persistSess();
   renderQuestion();
 }
 
@@ -477,7 +528,7 @@ function renderQuestion() {
         <div class="bar"><i style="width:${pct(sess.i / sess.len)}%"></i></div>
         <span class="count">${sess.i + 1}/${sess.len}</span>
       </div>
-      <div class="muted small" style="font-weight:800">${labels[sess.type]}</div>
+      <div class="muted small" style="font-weight:800">${labels[sess.type]}${sess.filter?.tema ? ' · ' + esc(DATA.temas.find(t => t.id === sess.filter.tema)?.corto || '') : ''}${sess.filter?.sec ? ' · ' + esc(secName(sess.filter.sec)) : ''}</div>
       <div class="qmeta">${chips}</div>
       <div class="question">${esc(q.pregunta)}</div>
       <div class="options">${opts}</div>
@@ -499,19 +550,33 @@ function answer(k) {
   const it = sess.items[sess.i];
   if (it.chosen !== null) return;
   const q = Q[it.qid];
+  const btns = [...app.querySelectorAll('.opt')];
+
+  // Simulacro: marca la elegida (se puede cambiar) y se confirma con "Siguiente"
+  if (sess.type === 'sim') {
+    btns.forEach((b, i) => b.classList.toggle('selected', i === k));
+    const fb = app.querySelector('#fb');
+    if (!fb.querySelector('#next')) {
+      fb.innerHTML = `<div class="sticky-bottom"><button class="btn" id="next">${sess.i + 1 >= sess.len ? 'Terminar simulacro' : 'Siguiente'}</button></div>`;
+      guardTaps(fb);
+      fb.querySelector('#next').onclick = () => {
+        if (!sess || it.chosen !== null) return;
+        const sel = btns.findIndex(b => b.classList.contains('selected'));
+        it.chosen = it.order[sel];
+        it.ok = it.chosen === q.correcta;
+        record(it.qid, it.ok);
+        sess.i++;
+        persistSess();
+        nextQuestion();
+      };
+    }
+    return;
+  }
+
   it.chosen = it.order[k];
   it.ok = it.chosen === q.correcta;
   record(it.qid, it.ok);
-
-  const btns = [...app.querySelectorAll('.opt')];
   btns.forEach(b => b.disabled = true);
-
-  if (sess.type === 'sim') {
-    btns[k].classList.add('selected');
-    const s = sess;
-    setTimeout(() => { if (sess !== s) return; sess.i++; nextQuestion(); }, 280);
-    return;
-  }
 
   const correctK = it.order.indexOf(q.correcta);
   btns.forEach((b, i) => {
@@ -527,12 +592,13 @@ function answer(k) {
     sess.fixed.splice(Math.min(sess.i + 4, sess.fixed.length), 0, pickQuestion(q.concepto, it.qid));
     sess.len = sess.fixed.length;
   }
+  persistSess();
 
   const fb = app.querySelector('#fb');
   fb.innerHTML = `
     <div class="feedback ${it.ok ? 'ok' : 'ko'}">
       <div class="fb-head"><div class="mini-kai">${kaiSVG()}</div><span>${it.ok ? rand(OK_MSGS) : rand(KO_MSGS)}</span></div>
-      <div class="quote">📖 «${esc(q.fuente)}»<span class="src">${esc(sourceLabel(q))}</span></div>
+      <div class="quote">📖 ${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
     </div>
     <div class="sticky-bottom"><button class="btn" id="next">${sess.i + 1 >= sess.len ? 'Ver resultados' : 'Siguiente'}</button></div>`;
   setKaiMood(fb, it.ok ? 'happy' : 'sad');
@@ -547,6 +613,12 @@ function answer(k) {
   }, 60);
 }
 
+// Cita del libro: si es un fragmento que empieza a mitad de frase, se marca con «…»
+function fmtQuote(f) {
+  const t = String(f).trim();
+  const frag = /^[a-záéíóúñü(]/.test(t);
+  return `«${frag ? '…' : ''}${esc(t)}»`;
+}
 function sourceLabel(q) {
   const t = DATA.temas.find(x => x.id === q.tema);
   return `${t ? t.corto : ''} · pág. ${q.pagina}`;
@@ -563,7 +635,8 @@ function showResults() {
   if (sess.type === 'diag') {
     S.diag = { date: Date.now(), score };
   }
-  if (sess.type === 'sim') S.sims.push({ date: Date.now(), score });
+  if (sess.type === 'sim') S.sims.push({ date: Date.now(), score, n: S.n });
+  S.cur = null;
   save();
 
   const r = readiness();
@@ -574,10 +647,14 @@ function showResults() {
     mood = passed ? 'celebrate' : 'think';
     msg = passed ? `¡Has sacado un ${pct(score)}%! Eso es nivel examen.` : `Has sacado un ${pct(score)}%. Necesitas un ${pct(GOAL_SIM)}% para darlo por superado. Repasa los fallos de abajo y vuelve a intentarlo.`;
   } else if (sess.type === 'diag') {
-    title = 'Diagnóstico completado 🩺';
+    title = 'Diagnóstico completado&nbsp;🩺';
     mood = 'happy';
     msg = score >= 0.7 ? `¡Partes de un ${pct(score)}%! Ya sabes mucho. Ahora vamos a pulir lo que falta.`
       : `Has acertado un ${pct(score)}%. ¡Perfecto para empezar! Ya sé por dónde tenemos que ir.`;
+  } else if (sess.type === 'fallos' && !failedIds().length) {
+    title = '¡Fallos corregidos! 🎉';
+    mood = 'celebrate';
+    msg = 'Has corregido todos tus fallos pendientes. ¡Así se hace! Sigue estudiando para ver temario nuevo.';
   } else {
     title = score >= 0.8 ? '¡Rondón! 🔥' : score >= 0.5 ? '¡Buena ronda!' : 'Ronda terminada';
     mood = score >= 0.5 ? 'happy' : 'talk';
@@ -601,11 +678,16 @@ function showResults() {
         <div class="q">${esc(q.pregunta)}</div>
         <div class="a ko">✗ Tu respuesta: ${esc(q.opciones[it.chosen])}</div>
         <div class="a ok">✓ Correcta: ${esc(q.opciones[q.correcta])}</div>
-        <div class="quote">📖 «${esc(q.fuente)}»<span class="src">${esc(sourceLabel(q))}</span></div>
+        <div class="quote">📖 ${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
       </div>`;
     }).join('')}` : '';
 
-  const again = { practice: 'Otra ronda', diag: 'Empezar a practicar', fallos: 'Seguir repasando fallos', sim: 'Repetir simulacro' }[sess.type];
+  const pending = failedIds().length;
+  let again = { practice: 'Otra ronda', diag: 'Empezar a practicar', fallos: 'Seguir repasando fallos', sim: 'Repetir simulacro' }[sess.type];
+  let againType = sess.type;
+  if (sess.type === 'sim' && score < GOAL_SIM && pending) { again = `Repasar fallos (${pending})`; againType = 'fallos'; }
+  if (sess.type === 'fallos' && !pending) { again = 'Seguir estudiando'; againType = 'practice'; }
+  if (sess.type === 'diag') againType = 'practice';
 
   render(`
     <div class="screen">
@@ -617,7 +699,7 @@ function showResults() {
       </div>
       <div class="stats">
         <div class="stat"><b>${pct(score)}%</b><span>aciertos</span></div>
-        <div class="stat"><b>+${newlyMastered}</b><span>dominadas</span></div>
+        <div class="stat"><b>+${newlyMastered}</b><span>nuevas sabidas</span></div>
         <div class="stat"><b>${pct(domNow)}%</b><span>nota est.</span></div>
       </div>
       <div class="btn-col">
@@ -628,13 +710,9 @@ function showResults() {
       ${review}
     </div>`, mood);
 
-  const type = sess.type, filter = sess.filter;
+  const filter = againType === sess.type ? sess.filter : {};
   sess = null;
-  app.querySelector('#again').onclick = () => {
-    if (type === 'diag') return startSession('practice');
-    if (type === 'fallos' && !failedIds().length) return showHome();
-    startSession(type, filter);
-  };
+  app.querySelector('#again').onclick = () => startSession(againType, filter);
   app.querySelector('#home').onclick = () => (r.ready && !S.readyShown) ? showReady() : showHome();
   if (r.ready && !S.readyShown) readyTimer = setTimeout(showReady, 2200);
 }
