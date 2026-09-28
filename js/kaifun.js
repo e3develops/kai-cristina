@@ -1,5 +1,5 @@
 // Easter eggs y vida de KAI: toques, baile, mimos, siesta, noche, ojos que siguen el dedo,
-// rachas de aciertos y el mensaje secreto de Kike (3 toques en la cruz roja).
+// rachas de aciertos y el mensaje secreto de Kike (mantener pulsado a KAI).
 import { kaiSVG } from './kai.js';
 
 const PHRASES = ['¡Uy! 😳', '¡Cosquillas!', '¡Estoy aquí contigo! 💙', '¿Otra rondita?', '¡Tú puedes!', 'Beep boop 🤖', '¡Me encanta estudiar contigo!', '¡Hola, Cristina! 👋'];
@@ -74,17 +74,19 @@ function secret() {
 }
 
 // ---------- Toques, pulsación larga ----------
-let taps = 0, lastTap = 0, crossTaps = 0, lastCross = 0, pressTimer = null, suppressClick = false;
+let taps = 0, lastTap = 0, pressTimer = null, suppressClick = false;
 
 document.addEventListener('pointerdown', e => {
   const svg = e.target.closest?.('svg.kai');
   if (!svg) return;
   clearTimeout(pressTimer);
+  // Mantener pulsado: mimos y el mensaje secreto de Kike
   pressTimer = setTimeout(() => {
     suppressClick = true;
+    taps = 0;
     pulse(svg, 'love', 2600);
     sparkle(svg, ['💕', '💖', '❤️'], 7);
-    say(svg, '¡Qué mimos! 🥰');
+    setTimeout(secret, 700);
   }, 600);
 }, true);
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => document.addEventListener(ev, () => clearTimeout(pressTimer), true));
@@ -94,13 +96,6 @@ document.addEventListener('click', e => {
   if (!svg) return;
   if (suppressClick) { suppressClick = false; return; }
   const now = Date.now();
-
-  // 3 toques en la cruz roja del pecho → mensaje secreto
-  if (e.target.closest('.k-cross')) {
-    crossTaps = now - lastCross < 1500 ? crossTaps + 1 : 1;
-    lastCross = now;
-    if (crossTaps >= 3) { crossTaps = 0; taps = 0; pulse(svg, 'oops', 500); setTimeout(secret, 350); return; }
-  }
 
   // 5 toques rápidos → baile
   taps = now - lastTap < 1200 ? taps + 1 : 1;
