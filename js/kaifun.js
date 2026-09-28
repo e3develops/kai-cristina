@@ -18,6 +18,16 @@ function pulse(svg, cls, ms) {
   clearTimeout(svg._kt[cls]);
   svg._kt[cls] = setTimeout(() => svg.classList.remove(cls), ms);
 }
+// Altura de la zona del notch / Dynamic Island (env() no se puede leer directamente desde JS)
+let satProbe = null;
+function safeAreaTop() {
+  if (!satProbe) {
+    satProbe = document.createElement('div');
+    satProbe.style.cssText = 'position:fixed;top:0;left:0;height:env(safe-area-inset-top);width:0;visibility:hidden;pointer-events:none';
+    document.body.appendChild(satProbe);
+  }
+  return satProbe.offsetHeight || 0;
+}
 function say(svg, text) {
   if (!svg) return;
   document.querySelectorAll('.kai-say').forEach(e => e.remove());
@@ -25,9 +35,18 @@ function say(svg, text) {
   const b = document.createElement('div');
   b.className = 'kai-say';
   b.textContent = text;
-  b.style.left = `${Math.min(innerWidth - 80, Math.max(80, r.left + r.width / 2))}px`;
-  b.style.top = `${Math.max(40, r.top + r.height * 0.04)}px`;
+  b.style.visibility = 'hidden';
   document.body.appendChild(b);
+  // Medir y colocar siempre dentro de la pantalla (encima de KAI; si no cabe, debajo)
+  const m = 10;
+  const w = b.offsetWidth, h = b.offsetHeight;
+  const safeTop = safeAreaTop();
+  const left = Math.min(innerWidth - w - m, Math.max(m, r.left + r.width / 2 - w / 2));
+  let top = r.top + r.height * 0.04 - h - 6;
+  if (top < safeTop + m) top = Math.min(innerHeight - h - m, r.bottom + 6);
+  b.style.left = `${left}px`;
+  b.style.top = `${Math.max(m, top)}px`;
+  b.style.visibility = '';
   setTimeout(() => b.remove(), 2300);
 }
 function sparkle(svg, emojis, n = 6) {

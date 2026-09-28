@@ -121,8 +121,8 @@
 .kai.night .k-nightcap { opacity: 1; }
 
 /* ---- Efectos alrededor de KAI ---- */
-.kai-say { position: fixed; z-index: 95; transform: translate(-50%, -100%); background: #fff; color: var(--ink, #0F2A2E); border: 2px solid var(--line, #D9ECE8); border-radius: 14px; padding: 7px 12px; font-weight: 800; font-size: 14px; white-space: nowrap; box-shadow: 0 6px 20px rgba(15, 42, 46, .15); pointer-events: none; animation: kSay 2.2s ease forwards; }
-@keyframes kSay { 0% { opacity: 0; transform: translate(-50%, -80%) scale(.8); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -125%); } }
+.kai-say { position: fixed; z-index: 95; max-width: calc(100vw - 20px); width: max-content; box-sizing: border-box; text-align: center; background: #fff; color: var(--ink, #0F2A2E); border: 2px solid var(--line, #D9ECE8); border-radius: 14px; padding: 7px 12px; font-weight: 800; font-size: 14px; line-height: 1.3; box-shadow: 0 6px 20px rgba(15, 42, 46, .15); pointer-events: none; animation: kSay 2.2s ease forwards; }
+@keyframes kSay { 0% { opacity: 0; transform: translateY(8px) scale(.9); } 12% { opacity: 1; transform: none; } 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-12px); } }
 .kai-fx { position: fixed; z-index: 94; pointer-events: none; font-size: 22px; animation: kFx 1.6s ease-out forwards; }
 @keyframes kFx { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx, 0px), -90px) scale(1.2) rotate(var(--rot, 0deg)); } }
 .kai-toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 16px); z-index: 96; transform: translateX(-50%); background: var(--ink, #0F2A2E); color: #fff; font-weight: 900; font-size: 16px; padding: 10px 18px; border-radius: 99px; box-shadow: 0 8px 24px rgba(15, 42, 46, .25); animation: kToast 2.4s ease forwards; pointer-events: none; white-space: nowrap; }
