@@ -1,5 +1,5 @@
 import { kaiSVG, setKaiMood } from './kai.js';
-import { needsInstallHelp, inAppBrowser, isIPad, art1, art2, art3, art4 } from './installart.js';
+import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4 } from './installart.js';
 
 // ------------------------------------------------------------------
 // Configuración
@@ -7,7 +7,7 @@ import { needsInstallHelp, inAppBrowser, isIPad, art1, art2, art3, art4 } from '
 const NAME = 'Cristina';
 const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
-const VERSION = '28/09 19:47'; // se muestra al pie para comprobar qué versión se está usando
+const VERSION = '28/09 19:53'; // se muestra al pie para comprobar qué versión se está usando
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
@@ -40,7 +40,7 @@ function shuffle(a) {
 }
 
 function freshState() {
-  return { v: 1, onboarded: false, n: 0, c: {}, q: {}, diag: null, sims: [], readyShown: false };
+  return { v: 1, onboarded: false, n: 0, c: {}, q: {}, diag: null, sims: [], readyShown: false, paused: {} };
 }
 function load() {
   try {
@@ -50,6 +50,7 @@ function load() {
       if (!st.c || typeof st.c !== 'object') st.c = {};
       if (!st.q || typeof st.q !== 'object') st.q = {};
       if (!Array.isArray(st.sims)) st.sims = [];
+      if (!st.paused || typeof st.paused !== 'object') st.paused = {};
       st.n = Number(st.n) || 0;
       return st;
     }
@@ -268,7 +269,8 @@ const KO_MSGS = ['¡Casi! Mira lo que dice el libro:', 'No pasa nada, te la vuel
 
 function homeMessage(r) {
   const failed = failedIds().length;
-  if (S.cur) return `Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias. Pulsa <b>Continuar</b> para seguir donde lo dejaste.`;
+  if (S.paused.diag) return `Tienes el <b>diagnóstico</b> a medias. Pulsa <b>Continuar</b> para seguir donde lo dejaste.`;
+  if (S.paused.sim) return `Tienes un <b>simulacro</b> a medias. Pulsa <b>Continuar</b> para terminarlo cuando quieras.`;
   if (!S.diag) return `Lo primero es el <b>diagnóstico</b>: ${DIAG_LEN} preguntas para saber qué sabes ya y enfocar bien la práctica. ¡Sin presión!`;
   if (r.ready) return `¡Estás <b>lista</b>, ${NAME}!&nbsp;🎉 Si quieres, sigue repasando un poquito para afianzar.`;
   const simFailed = S.sims.length && S.sims.at(-1).score < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN && failedIds().length > 0;
@@ -317,8 +319,9 @@ function installSteps() {
     { art: art1, html: isIPad
         ? `<p><b>1.</b> Toca el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba), arriba a la derecha.</p>`
         : `<p><b>1.</b> Toca los tres puntos <b>···</b> abajo a la derecha y después <b>Compartir</b>.</p><p class="muted small">Si ya ves el botón Compartir (el cuadrado con la flecha) en la barra, tócalo directamente.</p>` },
-    { art: art2, html: `<p><b>2.</b> Desliza la lista hacia abajo y toca <b>“Añadir a pantalla de inicio”</b>.</p><p class="muted small">Si no aparece, toca antes “Ver más”.</p>` },
-    { art: art3, html: `<p><b>3.</b> Deja activado <b>“Abrir como app web”</b> (si aparece) y pulsa <b>Añadir</b>, arriba a la derecha.</p>` },
+    { art: artMore, html: `<p><b>2.</b> En el menú que se abre, toca otra vez los tres puntos <b>···</b> (“Más”) para ver todas las acciones.</p><p class="muted small">Si ya ves “Añadir a pantalla de inicio”, pasa al siguiente paso.</p>` },
+    { art: art2, html: `<p><b>3.</b> Baja por la lista y toca <b>“Añadir a pantalla de inicio”</b>.</p>` },
+    { art: art3, html: `<p><b>4.</b> Deja activado <b>“Abrir como app web”</b> (si aparece) y pulsa <b>Añadir</b>, arriba a la derecha.</p>` },
     { art: art4, end: true, html: `<p><b>¡Listo!</b>&nbsp;🎉 Ahora cierra Safari y <b>ábreme desde mi icono</b> en tu pantalla de inicio. ¡Allí te espero!</p>` },
   ];
 }
@@ -457,10 +460,10 @@ function showHome() {
         </div>
       </div>
 
-      ${S.cur ? `<div class="card resume">
-        <div><b>Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias</b><br><span class="muted small">Llevas ${S.cur.items.filter(it => it.chosen !== null).length} de ${S.cur.len} preguntas respondidas</span></div>
-        <div class="btn-col"><button class="btn accent" id="resume">Continuar</button><button class="btn ghost" id="discard">Descartar</button></div>
-      </div>` : ''}
+      ${['diag', 'sim'].filter(t => S.paused[t]).map(t => `<div class="card resume">
+        <div><b>Tienes ${t === 'sim' ? 'un simulacro' : 'el diagnóstico'} a medias</b><br><span class="muted small">Llevas ${S.paused[t].items.filter(it => it && it.chosen !== null).length} de ${S.paused[t].len} preguntas respondidas</span></div>
+        <div class="btn-col"><button class="btn accent" data-resume="${t}">Continuar</button><button class="btn ghost" data-discard="${t}">Descartar</button></div>
+      </div>`).join('')}
 
       ${main}
 
@@ -477,8 +480,10 @@ function showHome() {
       <div class="footer">Hecho con 💙 por ${CREATOR} · KAI · versión ${VERSION}</div>
     </div>`, r.ready ? 'happy' : 'talk');
 
-  app.querySelector('#resume')?.addEventListener('click', resumeSession);
-  app.querySelector('#discard')?.addEventListener('click', () => { if (confirm('¿Descartar la ronda a medias? Lo ya respondido sigue contando para tu repaso.')) { S.cur = null; save(); showHome(); } });
+  app.querySelectorAll('[data-resume]').forEach(b => b.addEventListener('click', () => startSession(b.dataset.resume)));
+  app.querySelectorAll('[data-discard]').forEach(b => b.addEventListener('click', () => {
+    if (confirm(`¿Descartar ${b.dataset.discard === 'sim' ? 'el simulacro' : 'el diagnóstico'} a medias? Lo ya respondido sigue contando para tu repaso.`)) { delete S.paused[b.dataset.discard]; save(); showHome(); }
+  }));
   app.querySelector('#study')?.addEventListener('click', () => startSession('practice'));
   app.querySelector('#diag')?.addEventListener('click', () => startSession('diag'));
   app.querySelector('#diag2').addEventListener('click', () => startSession('diag'));
@@ -555,15 +560,15 @@ function showDiagRequired() {
   modal(`
     <div class="kai-row"><div class="kai-wrap">${kaiSVG('happy')}</div><div class="bubble">¡Primero el <b>diagnóstico</b>!&nbsp;🩺</div></div>
     <p>Son ${DIAG_LEN} preguntas de todos los apartados. Con ellas sé qué dominas ya y qué no, y así la práctica se centra desde el principio en lo que más te hace falta.</p>
-    <button class="btn" data-a="go">${S.cur?.type === 'diag' ? 'Continuar el diagnóstico' : 'Empezar el diagnóstico'}</button>
+    <button class="btn" data-a="go">${S.paused.diag ? 'Continuar el diagnóstico' : 'Empezar el diagnóstico'}</button>
     <button class="btn ghost" data-a="close">Ahora no</button>`, (el, close) => {
-    el.querySelector('[data-a=go]').onclick = () => { close(); S.cur?.type === 'diag' ? resumeSession() : startSession('diag'); };
+    el.querySelector('[data-a=go]').onclick = () => { close(); startSession('diag'); };
     el.querySelector('[data-a=close]').onclick = close;
   });
 }
 function startSession(type, filter = {}) {
   if (!S.diag && type !== 'diag') return showDiagRequired();
-  if (S.cur && !confirm(`Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias. ¿Lo dejas y empiezas otra cosa?`)) return;
+  if (S.paused[type]) return resumeSession(type); // diagnóstico/simulacro a medias: seguir donde se dejó
   S.cur = null;
   let fixed = null;
   let pool = conceptIds(filter);
@@ -588,24 +593,28 @@ function persistSess() {
   S.cur = { type, filter, fixed, len, i, items, reins, startMastered: [...sess.startMastered] };
   save();
 }
-function resumeSession() {
-  const c = S.cur;
-  if (!c || !c.items?.length) { S.cur = null; save(); return showHome(); }
+function resumeSession(type) {
+  const c = S.paused[type];
+  delete S.paused[type];
+  if (!c || !c.items?.length) { save(); return showHome(); }
+  S.cur = c;
   sess = { ...c, pool: conceptIds(c.filter || {}), recent: [], startMastered: new Set(c.startMastered || []) };
   const it = sess.items[sess.i];
   if (it && it.chosen !== null) sess.i++; // la última ya estaba respondida
   try { history.pushState({ kai: 'quiz' }, ''); } catch (e) { /* sin historial */ }
   nextQuestion();
 }
-function quitMsg() {
-  return sess?.type === 'sim'
-    ? '¿Salir del simulacro? Tus respuestas cuentan para el repaso, pero la nota del simulacro solo se guarda si lo terminas.'
-    : '¿Salir de esta ronda? Tus respuestas quedan guardadas, pero la ronda se cierra.';
-}
-const answeredAny = () => sess && sess.items.some(it => it && it.chosen !== null);
-function quitSession() {
-  sess = null;
+const PAUSABLE = ['diag', 'sim'];
+function pauseCurrent() {
+  // Guarda el diagnóstico/simulacro en curso para retomarlo luego (si ya se ha respondido algo)
+  const c = S.cur;
+  if (c && PAUSABLE.includes(c.type) && c.items?.some(it => it && it.chosen !== null)) S.paused[c.type] = c;
   S.cur = null;
+}
+function quitSession() {
+  if (sess) persistSess();
+  pauseCurrent();
+  sess = null;
   save();
   showHome();
 }
@@ -614,8 +623,7 @@ window.addEventListener('popstate', () => {
   if (ignorePop) { ignorePop = false; return; }
   if (viewerEl) return closeBook(true);
   if (!sess || !app.querySelector('.qtop')) return;
-  if (!answeredAny() || confirm(quitMsg())) quitSession();
-  else { try { history.pushState({ kai: 'quiz' }, ''); } catch (e) { /* sin historial */ } }
+  quitSession();
 });
 
 function nextQuestion() {
@@ -664,9 +672,7 @@ function renderQuestion() {
       <div id="fb"></div>
     </div>`);
 
-  app.querySelector('#quit').onclick = () => {
-    if (!answeredAny() || confirm(quitMsg())) quitSession();
-  };
+  app.querySelector('#quit').onclick = quitSession;
   sess.readyAt = Date.now() + 350; // ignora toques que llegan pegados al cambio de pregunta
   app.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => answer(Number(b.dataset.k))));
 }
@@ -1070,6 +1076,8 @@ async function init() {
     (CONCEPTS[p.concepto] ||= { id: p.concepto, tema: p.tema, seccion: p.seccion, sec: secKey(p), qs: [] }).qs.push(p.id);
   }
   S = load();
+  pauseCurrent();
+  save();
   try { navigator.storage?.persist?.(); } catch (e) { /* opcional */ }
   if (needsInstallHelp() && !browserAllowed()) return showInstallGate(0);
   if (S.onboarded) showHome(); else showOnboarding(0);

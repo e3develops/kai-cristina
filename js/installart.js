@@ -108,6 +108,33 @@ export const art2 = phone(`
   ${row(242, 'Añadir a pantalla de inicio', '<rect x="0" y="0" width="14" height="14" rx="3.5"/><path d="M7 3.5 v7 M3.5 7 h7"/>', true)}
   <text x="100" y="222" ${F} font-size="9" fill="#8E8E93" text-anchor="middle">⌄ desliza hacia abajo ⌄</text>`);
 
+// Paso intermedio: dentro del menú Compartir, tocar otra vez ··· para ver más acciones
+const actBtn = (x, label, icon, hl = false) => `
+  <circle cx="${x}" cy="172" r="17" fill="${hl ? '#D5F3EC' : '#fff'}" ${hl ? `stroke="${HL}" stroke-width="2.5"` : ''}/>
+  <g transform="translate(${x - 7} 165)" stroke="#1C1C1E" stroke-width="1.6" fill="${icon.includes('circle') ? '#1C1C1E' : 'none'}" stroke-linecap="round" stroke-linejoin="round">${icon}</g>
+  <text x="${x}" y="202" ${F} font-size="8" fill="#3C3C43" text-anchor="middle" font-weight="${hl ? 700 : 400}">${label}</text>`;
+export const artMore = phone(`
+  ${safariPage}
+  <rect x="0" y="0" width="200" height="300" fill="#000" opacity=".35"/>
+  <rect x="0" y="52" width="200" height="260" rx="16" fill="#F2F2F7"/>
+  <rect x="88" y="58" width="24" height="4" rx="2" fill="#C7C7CC"/>
+  ${kaiIcon(14, 70, 26)}
+  <text x="48" y="81" ${F} font-size="10" font-weight="700" fill="#1C1C1E">KAI · Estudia con Cristina</text>
+  <text x="48" y="93" ${F} font-size="8.5" fill="#8E8E93">e3develops.github.io</text>
+  <g>
+    <circle cx="34" cy="126" r="15" fill="#34C759"/><circle cx="76" cy="126" r="15" fill="#0A84FF"/>
+    <circle cx="118" cy="126" r="15" fill="#FFCC00"/><circle cx="160" cy="126" r="15" fill="#FF9500"/>
+  </g>
+  ${actBtn(34, 'Copiar', '<rect x="1" y="3" width="9" height="11" rx="2"/><path d="M5 1 h8 v11"/>')}
+  ${actBtn(76, 'Favoritos', '<path d="M7 0 l2 5 5 .5 -4 3.5 1.2 5 -4.2 -2.8 -4.2 2.8 1.2 -5 -4 -3.5 5 -.5 z"/>')}
+  ${actBtn(118, 'Marcador', '<path d="M3 0 h8 v14 l-4 -3 -4 3 z"/>')}
+  ${actBtn(160, 'Más', '<circle cx="1.5" cy="7" r="1.8"/><circle cx="7" cy="7" r="1.8"/><circle cx="12.5" cy="7" r="1.8"/>', true)}
+  ${tap(160, 172, 21)}
+  <rect x="12" y="222" width="176" height="28" rx="10" fill="#fff"/>
+  <text x="22" y="240" ${F} font-size="10" fill="#8E8E93">Copiar</text>
+  <rect x="12" y="256" width="176" height="28" rx="10" fill="#fff"/>
+  <text x="22" y="274" ${F} font-size="10" fill="#8E8E93">Añadir a la lista de lectura</text>`);
+
 // Paso 3: pantalla "Añadir a inicio" con el botón Añadir
 export const art3 = phone(`
   <rect x="0" y="0" width="200" height="300" fill="#F2F2F7"/>
