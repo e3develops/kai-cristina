@@ -139,11 +139,11 @@
   .kai * { animation: none !important; }
 }
 
-/* ---- Pantalla del pecho: cruz → electro → corazón → TAC → jeringa → cápsula (4 s cada una) ---- */
-.kai .k-scr { opacity: 0; animation: kScr 24s linear infinite both; animation-delay: calc(var(--i) * 4s); }
-@keyframes kScr { 0%, 1.5% { opacity: 0; } 2.5%, 16% { opacity: 1; } 16.67%, 100% { opacity: 0; } }
-.kai .k-scr-off { opacity: 0; pointer-events: none; animation: kOff 4s linear infinite; }
-@keyframes kOff { 0%, 4% { opacity: .9; } 6% { opacity: 0; } 8% { opacity: .5; } 10%, 97% { opacity: 0; } 100% { opacity: .9; } }
+/* ---- Pantalla del pecho: cruz → electro → corazón → TAC → jeringa → cápsula (15 s cada una) ---- */
+.kai .k-scr { opacity: 0; animation: kScr 90s linear infinite both; animation-delay: calc(var(--i) * 15s); }
+@keyframes kScr { 0%, .5% { opacity: 0; } .9%, 16.5% { opacity: 1; } 16.67%, 100% { opacity: 0; } }
+.kai .k-scr-off { opacity: 0; pointer-events: none; animation: kOff 15s linear infinite; }
+@keyframes kOff { 0%, 2.6% { opacity: .9; } 3.4% { opacity: 0; } 4.2% { opacity: .5; } 5%, 99.4% { opacity: 0; } 100% { opacity: .9; } }
 .kai .k-ecg { stroke-dasharray: 120; animation: kEcg 1.6s linear infinite; }
 @keyframes kEcg { from { stroke-dashoffset: 120; } to { stroke-dashoffset: -120; } }
 .kai .k-heart { transform-origin: 100px 140px; animation: kBeat .9s ease-in-out infinite; }
