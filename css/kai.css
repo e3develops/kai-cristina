@@ -1,0 +1,140 @@
+/* ---------- KAI: robot flotante ---------- */
+.kai { width: 100%; height: auto; overflow: visible; display: block; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; cursor: pointer; }
+.kai * { transform-box: view-box; }
+
+/* Flotar: sube y baja; la sombra se encoge cuando sube */
+.kai .k-bob { animation: kFloat 3.2s ease-in-out infinite; transform-origin: 100px 180px; }
+.kai .k-shadow { animation: kShadow 3.2s ease-in-out infinite; transform-origin: 100px 228px; }
+@keyframes kFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+@keyframes kShadow { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.78); opacity: .65; } }
+
+/* Propulsor */
+.kai .k-flame { transform-origin: 100px 198px; animation: kFlame .18s ease-in-out infinite alternate; }
+.kai .k-flame-in { animation-duration: .13s; }
+@keyframes kFlame { from { transform: scaleY(.82) scaleX(.95); } to { transform: scaleY(1.08) scaleX(1.04); } }
+.kai .k-jetlight { animation: kLed 1.2s ease-in-out infinite; }
+
+/* Cabeza, ojos, cejas */
+.kai .k-head { transform-origin: 100px 92px; transition: transform .4s ease; }
+.kai .k-eyes { transition: transform .4s ease; }
+.kai .k-look { transform: translate(var(--kx, 0px), var(--ky, 0px)); transition: transform .12s ease-out; }
+.kai .k-pupil { transform-box: fill-box; transform-origin: center; animation: kBlink 5s infinite; }
+@keyframes kBlink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.08); } }
+.kai .k-cheeks, .kai .k-blush, .kai .k-brow, .kai .k-closed, .kai .k-zzz, .kai .k-nightcap { opacity: 0; transition: opacity .3s ease; }
+.kai .k-brow { transform-box: fill-box; transform-origin: center; transition: opacity .3s ease, transform .3s ease; }
+.kai .k-led { animation: kLed 1.6s ease-in-out infinite; }
+@keyframes kLed { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* Brazos: giran desde el hombro, con un balanceo suave en reposo */
+.kai .k-arm { transition: transform .35s cubic-bezier(.3, 1.4, .5, 1); }
+.kai .k-arm-l { transform-origin: 50px 129px; animation: kSwayL 3.2s ease-in-out infinite; }
+.kai .k-arm-r { transform-origin: 150px 129px; animation: kSwayR 3.2s ease-in-out infinite; }
+@keyframes kSwayL { 0%, 100% { transform: rotate(4deg); } 50% { transform: rotate(-6deg); } }
+@keyframes kSwayR { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(6deg); } }
+
+/* ---- Estados de ánimo ---- */
+.kai.happy .k-cheeks { opacity: 1; }
+.kai.happy .k-blush { opacity: .55; }
+.kai.sad .k-brow { opacity: 1; }
+.kai.sad .k-brow-l { transform: rotate(-14deg) translateY(3px); }
+.kai.sad .k-brow-r { transform: rotate(14deg) translateY(3px); }
+.kai.sad .k-head { transform: rotate(-4deg) translateY(3px); }
+.kai.sad .k-eyes { transform: translateY(3px); }
+.kai.think .k-brow-l { opacity: 1; transform: translateY(-4px); }
+.kai.think .k-eyes { transform: translate(-4px, -5px); }
+.kai.think .k-head { transform: rotate(-6deg); }
+.kai.think .k-arm-r { animation: none; transform: rotate(-140deg); }   /* mano a la barbilla */
+.kai.talk .k-head { animation: kTalk 1.4s ease-in-out infinite; }
+@keyframes kTalk { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(3deg); } }
+
+/* Saludar */
+.kai.wave .k-arm-r { animation: kWave .55s ease-in-out 4; }
+@keyframes kWave { 0%, 100% { transform: rotate(-45deg); } 50% { transform: rotate(-95deg); } }
+
+/* ¡Bien! brazo arriba (pulgar) y saltito */
+.kai.thumbs .k-arm-r { animation: none; transform: rotate(-70deg); }
+.kai.thumbs .k-bob { animation: kHop .5s ease-out 1, kFloat 3.2s ease-in-out .5s infinite; }
+.kai.thumbs .k-cheeks { opacity: 1; }
+.kai.thumbs .k-blush { opacity: .55; }
+@keyframes kHop { 0% { transform: translateY(0); } 40% { transform: translateY(-14px); } 100% { transform: translateY(0); } }
+
+/* ¡Ups! mano a la cabeza */
+.kai.facepalm .k-arm-l { animation: none; transform: rotate(130deg); }
+.kai.facepalm .k-head { transform: rotate(5deg) translateY(3px); }
+.kai.facepalm .k-brow { opacity: 1; }
+.kai.facepalm .k-brow-l { transform: rotate(-12deg) translateY(3px); }
+.kai.facepalm .k-brow-r { transform: rotate(12deg) translateY(3px); }
+
+/* Celebrar: brazos arriba, propulsor a tope */
+.kai.celebrate .k-bob { animation: kJump .7s ease-in-out infinite; }
+.kai.celebrate .k-arm-r { animation: none; transform: rotate(-65deg); }
+.kai.celebrate .k-arm-l { animation: none; transform: rotate(65deg); }
+.kai.celebrate .k-cheeks { opacity: 1; }
+.kai.celebrate .k-blush { opacity: .6; }
+.kai.celebrate .k-flame { animation-duration: .09s; }
+@keyframes kJump { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-18px); } }
+
+/* ---- Easter eggs (kaifun.js) ---- */
+/* Toque: efecto gelatina + parpadeo */
+.kai.oops .k-bob { animation: kSquish .5s cubic-bezier(.3, 1.6, .5, 1); }
+.kai.oops .k-pupil { animation: kBlinkNow .35s ease; }
+@keyframes kSquish { 0% { transform: scale(1, 1); } 25% { transform: scale(1.12, .84) translateY(10px); } 55% { transform: scale(.92, 1.1) translateY(-8px); } 100% { transform: scale(1, 1); } }
+@keyframes kBlinkNow { 0%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.08); } }
+
+/* Baile */
+.kai.dance .k-bob { animation: kDance .9s ease-in-out infinite; }
+.kai.dance .k-arm-l { animation: kDanceL .45s ease-in-out infinite alternate; }
+.kai.dance .k-arm-r { animation: kDanceR .45s ease-in-out infinite alternate; }
+.kai.dance .k-head { animation: kTalk .45s ease-in-out infinite; }
+.kai.dance .k-flame { animation-duration: .08s; }
+.kai.dance .k-cheeks { opacity: 1; }
+.kai.dance .k-blush { opacity: .6; }
+@keyframes kDance { 0%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(-10px, -12px) rotate(-8deg); } 50% { transform: translate(0, 0) rotate(0); } 75% { transform: translate(10px, -12px) rotate(8deg); } }
+@keyframes kDanceL { from { transform: rotate(-25deg); } to { transform: rotate(70deg); } }
+@keyframes kDanceR { from { transform: rotate(25deg); } to { transform: rotate(-70deg); } }
+
+/* Mimos */
+.kai.love .k-cheeks { opacity: 1; }
+.kai.love .k-blush { opacity: .9; }
+.kai.love .k-pupil { animation: none; transform: scaleY(.55); }
+.kai.love .k-arm-l { animation: none; transform: rotate(-35deg); }
+.kai.love .k-arm-r { animation: none; transform: rotate(35deg); }
+
+/* Voltereta (racha de aciertos) */
+.kai.flip .k-bob { animation: kFlip .9s cubic-bezier(.4, 0, .2, 1); }
+@keyframes kFlip { 0% { transform: translateY(0) rotate(0); } 40% { transform: translateY(-30px) rotate(-180deg); } 80% { transform: translateY(-6px) rotate(-360deg); } 100% { transform: translateY(0) rotate(-360deg); } }
+
+/* Dormido */
+.kai.sleep .k-look { opacity: 0; }
+.kai.sleep .k-closed, .kai.sleep .k-zzz { opacity: 1; }
+.kai.sleep .k-zzz text { animation: kZzz 2.4s ease-in-out infinite; }
+.kai.sleep .k-zzz text:nth-child(2) { animation-delay: .4s; }
+.kai.sleep .k-zzz text:nth-child(3) { animation-delay: .8s; }
+.kai.sleep .k-head { transform: rotate(-8deg) translateY(4px); }
+.kai.sleep .k-bob { animation-duration: 5s; }
+.kai.sleep .k-arm { animation: none; transform: rotate(0); }
+.kai.sleep .k-flame { animation-duration: .5s; opacity: .6; }
+@keyframes kZzz { 0%, 100% { opacity: .2; transform: translateY(4px); } 50% { opacity: 1; transform: translateY(-4px); } }
+
+/* Noche: gorro de dormir en vez de cofia */
+.kai.night .k-cap { opacity: 0; }
+.kai.night .k-nightcap { opacity: 1; }
+
+/* ---- Efectos alrededor de KAI ---- */
+.kai-say { position: fixed; z-index: 95; transform: translate(-50%, -100%); background: #fff; color: var(--ink, #0F2A2E); border: 2px solid var(--line, #D9ECE8); border-radius: 14px; padding: 7px 12px; font-weight: 800; font-size: 14px; white-space: nowrap; box-shadow: 0 6px 20px rgba(15, 42, 46, .15); pointer-events: none; animation: kSay 2.2s ease forwards; }
+@keyframes kSay { 0% { opacity: 0; transform: translate(-50%, -80%) scale(.8); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -125%); } }
+.kai-fx { position: fixed; z-index: 94; pointer-events: none; font-size: 22px; animation: kFx 1.6s ease-out forwards; }
+@keyframes kFx { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx, 0px), -90px) scale(1.2) rotate(var(--rot, 0deg)); } }
+.kai-toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 16px); z-index: 96; transform: translateX(-50%); background: var(--ink, #0F2A2E); color: #fff; font-weight: 900; font-size: 16px; padding: 10px 18px; border-radius: 99px; box-shadow: 0 8px 24px rgba(15, 42, 46, .25); animation: kToast 2.4s ease forwards; pointer-events: none; white-space: nowrap; }
+@keyframes kToast { 0% { opacity: 0; transform: translate(-50%, -20px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -10px); } }
+
+/* Mensaje secreto */
+.secret { text-align: center; align-items: center; }
+.secret .kai { width: 130px; margin: 0 auto; }
+.secret .s-hint { color: var(--ink-2, #4A6468); font-weight: 800; font-size: 15px; }
+.secret .s-letter { background: #FFF7F9; border: 2px dashed #FDA4AF; border-radius: 18px; padding: 16px 18px; font-size: 17px; line-height: 1.55; font-weight: 700; text-align: left; color: #3F1D2B; }
+.secret .s-sign { display: block; text-align: right; margin-top: 8px; font-weight: 900; color: #E11D48; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kai * { animation: none !important; }
+}

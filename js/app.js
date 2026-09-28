@@ -7,7 +7,7 @@ import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4
 const NAME = 'Cristina';
 const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
-const VERSION = '28/09 19:53'; // se muestra al pie para comprobar qué versión se está usando
+const VERSION = '28/09 20:14'; // se muestra al pie para comprobar qué versión se está usando
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
@@ -734,7 +734,10 @@ function answer(k) {
       <button class="book-btn" data-q="${esc(q.id)}">🔎 Llévame al libro</button>
     </div>
     <div class="sticky-bottom"><button class="btn" id="next">${sess.i + 1 >= sess.len ? 'Ver resultados' : 'Siguiente'}</button></div>`;
-  setKaiMood(fb, it.ok ? 'happy' : 'sad');
+  setKaiMood(fb, it.ok ? 'happy thumbs' : 'facepalm');
+  // Racha de aciertos seguidos en esta ronda (KAI hace una voltereta cada 5)
+  sess.streak = it.ok ? (sess.streak || 0) + 1 : 0;
+  if (it.ok) setTimeout(() => window.kaiFun?.streak(sess?.streak || 0), 250);
   fb.querySelector('#next').onclick = () => { if (!sess) return; sess.i++; nextQuestion(); };
   fb.querySelector('.book-btn').onclick = () => openBook(q.id);
   guardTaps(fb);

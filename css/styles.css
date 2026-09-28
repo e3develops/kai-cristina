@@ -101,45 +101,7 @@ b { font-weight: 800; }
 .btn-col .btn.ghost + .btn.ghost { margin-top: -8px; }
 .btn-col .btn:not(.ghost) + .btn.ghost { margin-top: -2px; }
 
-/* ---------- KAI ---------- */
-.kai { width: 100%; height: auto; overflow: visible; display: block; }
-.kai .k-bob { animation: kBob 3.2s ease-in-out infinite; transform-origin: 100px 200px; }
-.kai .k-shadow { animation: kShadow 3.2s ease-in-out infinite; transform-origin: 100px 224px; transform-box: view-box; }
-.kai .k-head { transform-origin: 100px 92px; transition: transform .4s ease; }
-.kai .k-pupil { transform-box: fill-box; transform-origin: center; animation: kBlink 5s infinite; }
-.kai .k-eyes { transition: transform .4s ease; }
-.kai .k-cheeks, .kai .k-blush { opacity: 0; transition: opacity .3s ease; }
-.kai .k-brow { transform-box: fill-box; transform-origin: center; transition: transform .3s ease; }
-.kai .k-arm { transform-box: fill-box; transition: transform .3s ease; }
-.kai .k-arm-r { transform-origin: 0% 50%; }
-.kai .k-arm-l { transform-origin: 100% 50%; }
-.kai .k-led { animation: kLed 1.6s ease-in-out infinite; }
-
-.kai.happy .k-cheeks { opacity: 1; }
-.kai.happy .k-blush { opacity: .55; }
-.kai.happy .k-brow-l { transform: translateY(-3px); }
-.kai.happy .k-brow-r { transform: translateY(-3px); }
-.kai.sad .k-brow-l { transform: rotate(-14deg) translateY(2px); }
-.kai.sad .k-brow-r { transform: rotate(14deg) translateY(2px); }
-.kai.sad .k-head { transform: rotate(-4deg) translateY(3px); }
-.kai.sad .k-eyes { transform: translateY(3px); }
-.kai.think .k-eyes { transform: translate(-4px, -4px); }
-.kai.think .k-head { transform: rotate(-6deg); }
-.kai.talk .k-head { animation: kTalk 1.4s ease-in-out infinite; }
-.kai.wave .k-arm-r { animation: kWave .7s ease-in-out 3; }
-.kai.celebrate .k-bob { animation: kJump .7s ease-in-out infinite; }
-.kai.celebrate .k-arm-r { transform: rotate(-35deg); }
-.kai.celebrate .k-arm-l { transform: rotate(35deg); }
-.kai.celebrate .k-cheeks { opacity: 1; }
-.kai.celebrate .k-blush { opacity: .6; }
-
-@keyframes kBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-@keyframes kShadow { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(.9); } }
-@keyframes kBlink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.08); } }
-@keyframes kTalk { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(3deg); } }
-@keyframes kWave { 0%,100% { transform: rotate(0); } 50% { transform: rotate(-40deg); } }
-@keyframes kJump { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
-@keyframes kLed { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+/* ---------- KAI: ver css/kai.css ---------- */
 
 /* ---------- Bocadillo ---------- */
 .kai-row { display: flex; align-items: flex-end; gap: 12px; }
