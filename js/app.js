@@ -1,4 +1,5 @@
 import { kaiSVG, setKaiMood } from './kai.js';
+import { needsInstallHelp, inAppBrowser, isIPad, art1, art2, art3, art4 } from './installart.js';
 
 // ------------------------------------------------------------------
 // Configuración
@@ -6,7 +7,7 @@ import { kaiSVG, setKaiMood } from './kai.js';
 const NAME = 'Cristina';
 const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
-const VERSION = '28/09 19:24'; // se muestra al pie para comprobar qué versión se está usando
+const VERSION = '28/09 19:39'; // se muestra al pie para comprobar qué versión se está usando
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
@@ -148,9 +149,9 @@ function remainingWork() {
   return { left, minutes };
 }
 function fmtTime(min) {
-  if (min < 60) return `${Math.max(5, Math.round(min / 5) * 5)} min`;
+  if (min < 60) return `${Math.max(5, Math.round(min / 5) * 5)} min`;
   const h = Math.round(min / 30) / 2;
-  return `${String(h).replace('.', ',')} h`;
+  return `${String(h).replace('.', ',')} h`;
 }
 const MIN_FORECAST = 20; // respuestas mínimas para mostrar la previsión de nota
 const hasForecast = () => S.n >= MIN_FORECAST;
@@ -163,7 +164,7 @@ function readiness() {
   const lastSim = last2.length ? last2.reduce((a, x) => a + x.score, 0) / last2.length : null;
   const checks = [
     { ok: hasForecast() && all >= GOAL_ALL, label: `Previsión de nota de ${pct(GOAL_ALL)}% o más`, info: hasForecast() ? `ahora: ${pct(all)}%` : `se calcula a partir de ${MIN_FORECAST} respuestas (llevas ${S.n})` },
-    { ok: hasForecast() && temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Responder al menos el ${pct(GOAL_COVER)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') + (remainingWork().left ? ` · faltan ${remainingWork().left} (≈ ${fmtTime(remainingWork().minutes)})` : '') },
+    { ok: hasForecast() && temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Responder al menos el ${pct(GOAL_COVER)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') + (remainingWork().left ? ` · faltan ${remainingWork().left} (≈ ${fmtTime(remainingWork().minutes)})` : '') },
     { ok: lastSim !== null && lastSim >= GOAL_SIM, label: `Simulacros con ${pct(GOAL_SIM)}% o más`, info: lastSim === null ? 'sin hacer' : S.sims.length > 1 ? `media de los 2 últimos: ${pct(lastSim)}%` : `último: ${pct(lastSim)}%` },
   ];
   return { all, temas, lastSim, checks, ready: checks.every(c => c.ok) };
@@ -262,22 +263,22 @@ function buildSim() {
 // ------------------------------------------------------------------
 // Frases de KAI
 // ------------------------------------------------------------------
-const OK_MSGS = ['¡Bien!', '¡Exacto!', '¡Eso es!', `¡Genial, ${NAME}!`, '¡Perfecto!', '¡Correcto!', '¡Muy bien!', '¡Toma ya! 💪'];
+const OK_MSGS = ['¡Bien!', '¡Exacto!', '¡Eso es!', `¡Genial, ${NAME}!`, '¡Perfecto!', '¡Correcto!', '¡Muy bien!', '¡Toma ya! 💪'];
 const KO_MSGS = ['¡Casi! Mira lo que dice el libro:', 'No pasa nada, te la vuelvo a preguntar pronto.', 'Ojo con esta, léela con calma:', 'Esta la repasamos otra vez en un ratito.'];
 
 function homeMessage(r) {
   const failed = failedIds().length;
   if (S.cur) return `Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias. Pulsa <b>Continuar</b> para seguir donde lo dejaste.`;
   if (!S.diag) return `Lo primero es el <b>diagnóstico</b>: ${DIAG_LEN} preguntas para saber qué sabes ya y enfocar bien la práctica. ¡Sin presión!`;
-  if (r.ready) return `¡Estás <b>lista</b>, ${NAME}! 🎉 Si quieres, sigue repasando un poquito para afianzar.`;
+  if (r.ready) return `¡Estás <b>lista</b>, ${NAME}!&nbsp;🎉 Si quieres, sigue repasando un poquito para afianzar.`;
   const simFailed = S.sims.length && S.sims.at(-1).score < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN && failedIds().length > 0;
-  if (simFailed) return `En el simulacro sacaste un <b>${pct(S.sims.at(-1).score)}%</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo 💪`;
+  if (simFailed) return `En el simulacro sacaste un <b>${pct(S.sims.at(-1).score)}%</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo&nbsp;💪`;
   const covered = r.temas.every(t => t.cov >= GOAL_COVER);
   if (r.all >= GOAL_ALL && covered && r.lastSim === null) return `¡Tu previsión de nota es de un <b>${pct(r.all)}%</b>! Es el momento de hacer un <b>simulacro de examen</b>.`;
   if (r.all >= GOAL_ALL && !covered) return `Lo que has visto lo llevas genial (<b>${pct(r.all)}%</b>). Sigue estudiando para cubrir más temario.`;
   if (failed >= 8) return `Tienes <b>${failed}</b> preguntas falladas pendientes. Si sigues estudiando te las iré repitiendo hasta que salgan solas.`;
   if (!hasForecast() || r.all < 0.3) return `Vamos poco a poco. Pulsa <b>Seguir estudiando</b> y yo elijo las preguntas que más te convienen.`;
-  return rand([`¡Vas muy bien! Si el examen fuera ahora, calculo que sacarías un <b>${pct(r.all)}%</b>.`, `Cada pregunta cuenta. ¡Sigue así, ${NAME}! 💪`]);
+  return rand([`¡Vas muy bien! Si el examen fuera ahora, calculo que sacarías un <b>${pct(r.all)}%</b>.`, `Cada pregunta cuenta. ¡Sigue así, ${NAME}!&nbsp;💪`]);
 }
 
 // ------------------------------------------------------------------
@@ -298,31 +299,87 @@ function render(html, mood) {
   guardTaps(app);
 }
 
+// ---------- Puerta de instalación (iPhone/iPad en Safari) ----------
+// En iPhone la app solo se usa desde el icono de la pantalla de inicio: así el progreso
+// nunca se reparte entre Safari y la app instalada. Desde Safari solo se enseña cómo instalarla.
+const ALLOW_BROWSER = 'kai-allow-browser';
+function browserAllowed() {
+  if (/[?&]safari(&|$)/.test(location.search)) return true;
+  try { return localStorage.getItem(ALLOW_BROWSER) === '1'; } catch (e) { return false; }
+}
+function installSteps() {
+  if (inAppBrowser) return [
+    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>!&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
+    { mood: 'think', end: true, html: `<p>Estás dentro de otra app y desde aquí no puedo funcionar.</p><p>Toca <b>···</b> (o la brújula) y elige <b>“Abrir en Safari”</b>. Allí te enseño cómo ponerme en tu pantalla de inicio&nbsp;📲</p>` },
+  ];
+  return [
+    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>!&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio. ${CREATOR} me ha creado para ayudarte con tus exámenes&nbsp;💙</p>` },
+    { mood: 'talk', html: `<p>Primero, ponme en tu <b>pantalla de inicio</b>&nbsp;📲</p><p>Solo funciono desde mi icono: así me abres como una app, a pantalla completa, sin internet y con tu progreso siempre a salvo. Son 3 toques.</p>` },
+    { art: art1, html: `<p><b>1.</b> Toca el botón <b>Compartir</b> de Safari (el cuadrado con la flecha hacia arriba), ${isIPad ? 'arriba a la derecha' : 'en la barra de abajo'}.</p>${isIPad ? '' : '<p class="muted small">Si no lo ves, toca antes <b>···</b></p>'}` },
+    { art: art2, html: `<p><b>2.</b> Desliza la lista hacia abajo y toca <b>“Añadir a pantalla de inicio”</b>.</p>` },
+    { art: art3, html: `<p><b>3.</b> Deja activado <b>“Abrir como app web”</b> (si aparece) y pulsa <b>Añadir</b>, arriba a la derecha.</p>` },
+    { art: art4, end: true, html: `<p><b>¡Listo!</b>&nbsp;🎉 Ahora cierra Safari y <b>ábreme desde mi icono</b> en tu pantalla de inicio. ¡Allí te espero!</p>` },
+  ];
+}
+function showInstallGate(i = 0) {
+  const steps = installSteps();
+  const st = steps[i];
+  const dots = steps.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('');
+  render(`
+    <div class="screen onb">
+      ${st.art ? `<div class="inst-art">${st.art}</div>` : `<div class="kai-big">${kaiSVG()}</div>`}
+      <div class="bubble">${st.html}</div>
+      <div class="dots">${dots}</div>
+      <div class="btn-col">
+        ${st.end
+          ? `<button class="btn secondary" id="again">Ver los pasos otra vez</button>`
+          : `<button class="btn" id="next">Siguiente</button>`}
+        ${i > 0 ? '<button class="btn ghost" id="prev">Atrás</button>' : ''}
+      </div>
+    </div>`, st.mood);
+  app.querySelector('#next')?.addEventListener('click', () => showInstallGate(i + 1));
+  app.querySelector('#prev')?.addEventListener('click', () => showInstallGate(i - 1));
+  app.querySelector('#again')?.addEventListener('click', () => showInstallGate(inAppBrowser ? 0 : 2));
+  // Puerta trasera para pruebas: 5 toques seguidos sobre la ilustración del último paso
+  if (st.end) {
+    let taps = 0, t0 = 0;
+    app.querySelector('.inst-art, .kai-big')?.addEventListener('click', () => {
+      const now = Date.now();
+      taps = now - t0 < 800 ? taps + 1 : 1;
+      t0 = now;
+      if (taps >= 5 && confirm('¿Usar KAI aquí en el navegador? (solo para pruebas: el progreso no se comparte con la app instalada)')) {
+        try { localStorage.setItem(ALLOW_BROWSER, '1'); } catch (e) { /* sin almacenamiento */ }
+        S.onboarded ? showHome() : showOnboarding(0);
+      }
+    });
+  }
+}
+
 // ---------- Onboarding ----------
 function onboardingSteps() {
   const total = DATA.preguntas.length;
   const temas = DATA.temas.map(t => `<li><span class="n">${t.emoji}</span><span>${esc(t.nombre)} <span class="muted small">(${DATA.preguntas.filter(p => p.tema === t.id).length} preguntas)</span></span></li>`).join('');
   return [
-    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>! 👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
-    { mood: 'talk', html: `<p><b>${CREATOR}</b> me ha creado para ayudarte con tus estudios de enfermería.</p><p>Me ha pedido que te cuide mucho 💙</p>` },
-    { mood: 'think', html: `<p>Me he leído tus apuntes de arriba abajo 📚</p><ul class="steps-list">${temas}</ul><p>Las respuestas correctas y las citas salen <b>literalmente de tu libro</b>. No me invento nada.</p>` },
+    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>!&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
+    { mood: 'talk', html: `<p><b>${CREATOR}</b> me ha creado para ayudarte con tus estudios de enfermería.</p><p>Me ha pedido que te cuide mucho&nbsp;💙</p>` },
+    { mood: 'think', html: `<p>Me he leído tus apuntes de arriba abajo&nbsp;📚</p><ul class="steps-list">${temas}</ul><p>Las respuestas correctas y las citas salen <b>literalmente de tu libro</b>. No me invento nada.</p>` },
     { mood: 'talk', html: `<p>Así vamos a trabajar:</p><ul class="steps-list">
         <li><span class="n">1</span><span><b>Diagnóstico:</b> lo primero de todo. ${DIAG_LEN} preguntas para ver qué sabes y enfocar tu práctica.</span></li>
         <li><span class="n">2</span><span><b>Práctica inteligente:</b> te pregunto más lo que fallas, hasta que lo domines.</span></li>
         <li><span class="n">3</span><span><b>Simulacro:</b> un examen de prueba para comprobar que estás lista.</span></li></ul>` },
-    { mood: 'happy', html: `<p>Después de cada respuesta te enseño <b>la frase exacta del libro</b> y su página.</p><p>Así también aprendes de los fallos 😉</p>` },
+    { mood: 'happy', html: `<p>Después de cada respuesta te enseño <b>la frase exacta del libro</b> y su página.</p><p>Así también aprendes de los fallos&nbsp;😉</p>` },
     { mood: 'think', html: `<p>Para que sepas cómo vas, en el inicio te enseño:</p><ul class="steps-list">
         <li><span class="n">✅</span><span><b>% dominado:</b> preguntas que tienes bien ahora mismo. Empieza en 0% y es exacto.</span></li>
         <li><span class="n">🔮</span><span><b>Previsión de nota:</b> lo que calculo que sacarías hoy. Aparece a partir de ${MIN_FORECAST} respuestas.</span></li>
         <li><span class="n">📝</span><span><b>Simulacros:</b> tu nota en un examen de prueba. Es la pista más real.</span></li></ul>` },
-    { mood: 'talk', html: `<p>Te diré <b>¡Estás lista!</b> 🎉 cuando cumplas las 3 cosas:</p><ul class="steps-list">
+    { mood: 'talk', html: `<p>Te diré <b>¡Estás lista!</b>&nbsp;🎉 cuando cumplas las 3 cosas:</p><ul class="steps-list">
         <li><span class="n">1</span><span>Haber respondido al menos el <b>${pct(GOAL_COVER)}%</b> de cada tema (unas ${remainingWork().left + qStats().seen} preguntas).</span></li>
         <li><span class="n">2</span><span>Una previsión de nota del <b>${pct(GOAL_ALL)}%</b> o más.</span></li>
         <li><span class="n">3</span><span>Sacar de media un <b>${pct(GOAL_SIM)}%</b> o más en tus 2 últimos simulacros.</span></li></ul>
         <p>Calculo que te llevará unas <b>${fmtTime(remainingWork().minutes)}</b> en total.</p>` },
-    { mood: 'happy', html: `<p>No hace falta hacerlo de golpe: <b>tu progreso se guarda solo</b> y puedes parar cuando quieras.</p><p>Y si no llegas a "lista", no te agobies: cada pregunta que repasas suma. Fíjate en tu <b>% dominado</b> y en tus <b>simulacros</b> 💙</p>` },
+    { mood: 'happy', html: `<p>No hace falta hacerlo de golpe: <b>tu progreso se guarda solo</b> y puedes parar cuando quieras.</p><p>Y si no llegas a "lista", no te agobies: cada pregunta que repasas suma. Fíjate en tu <b>% dominado</b> y en tus <b>simulacros</b>&nbsp;💙</p>` },
     S.diag
-      ? { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¡Seguimos cuando quieras! 💪</p>`, last: true }
+      ? { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¡Seguimos cuando quieras!&nbsp;💪</p>`, last: true }
       : { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¿Empezamos con el diagnóstico?</p>`, last: true },
   ];
 }
@@ -339,7 +396,7 @@ function showOnboarding(i = 0) {
         ${st.last
           ? (S.diag
               ? `<button class="btn" id="go-home">Volver al inicio</button><button class="btn ghost" id="prev">Atrás</button>`
-              : `<button class="btn" id="go-diag">¡Vamos! 🚀</button><button class="btn ghost" id="go-home">Primero echo un vistazo</button><button class="btn ghost" id="prev">Atrás</button>`)
+              : `<button class="btn" id="go-diag">¡Vamos!&nbsp;🚀</button><button class="btn ghost" id="go-home">Primero echo un vistazo</button><button class="btn ghost" id="prev">Atrás</button>`)
           : `<button class="btn" id="next">Siguiente</button>${i > 0 ? '<button class="btn ghost" id="prev">Atrás</button>' : '<button class="btn ghost" id="skip">Saltar presentación</button>'}`}
       </div>
     </div>`, st.mood);
@@ -379,7 +436,7 @@ function showHome() {
   render(`
     <div class="screen">
       <div class="topbar">
-        <div><div class="hello">Hola, ${NAME} 👋</div><h1>¡A por el examen!</h1></div>
+        <div><div class="hello">Hola, ${NAME}&nbsp;👋</div><h1>¡A por el examen!</h1></div>
         <button class="icon-btn" id="menu" aria-label="Menú">⚙️</button>
       </div>
 
@@ -392,8 +449,8 @@ function showHome() {
         <div class="ready-card">
           <div class="ring" style="--p:${pct(all.pOk)}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${pct(all.pOk)}%</b><span>dominado</span></div></div>
           <div>
-            <h3>${r.ready ? '¡Lista para el examen! 🎉' : 'Preparación para el examen'}</h3>
-            <p class="muted small" style="font-weight:700;margin-top:2px">${all.ok} de ${all.total} preguntas bien · ${all.seen} respondidas${hasForecast() ? ` · previsión de nota: <b>${pct(r.all)}%</b>` : ''}</p>
+            <h3>${r.ready ? '¡Lista para el examen!&nbsp;🎉' : 'Preparación para el examen'}</h3>
+            <p class="muted small" style="font-weight:700;margin-top:2px">${all.ok} de ${all.total} preguntas bien · ${all.seen}&nbsp;respondidas${hasForecast() ? ` · previsión de nota:&nbsp;<b>${pct(r.all)}%</b>` : ''}</p>
             <ul class="checks">${checks}</ul>
           </div>
         </div>
@@ -458,7 +515,7 @@ function showMenu() {
 function confirmSim() {
   const r = readiness();
   modal(`
-    <h2>📝 Simulacro de examen</h2>
+    <h2>📝&nbsp;Simulacro de examen</h2>
     <p>${SIM_LEN} preguntas de todo el temario. <b>No verás si aciertas hasta el final</b>, como en el examen de verdad.</p>
     ${!hasForecast() || r.all < 0.6 ? `<p class="muted">Consejo de KAI: rinde más cuando tu previsión de nota pase del 60%${hasForecast() ? ` (ahora: ${pct(r.all)}%)` : ''}. Pero puedes hacerlo cuando quieras.</p>` : ''}
     <button class="btn accent" data-a="go">Empezar simulacro</button>
@@ -484,7 +541,7 @@ function showProgress() {
   }).join('');
   render(`
     <div class="screen">
-      <div class="topbar"><button class="icon-btn" id="back" aria-label="Volver">←</button><h2>Mi progreso</h2><span style="width:42px"></span></div>
+      <div class="topbar"><button class="icon-btn" id="back" aria-label="Volver">←</button><h2>Mi progreso</h2><span style="width:44px;flex:0 0 44px"></span></div>
       <p class="muted">El porcentaje es exacto: preguntas que tienes <b>bien</b> (la última vez que te salieron, las acertaste) sobre el total del apartado. Toca un apartado para practicarlo.</p>
       ${blocks}
     </div>`);
@@ -495,7 +552,7 @@ function showProgress() {
 // ---------- Sesión de test ----------
 function showDiagRequired() {
   modal(`
-    <div class="kai-row"><div class="kai-wrap">${kaiSVG('happy')}</div><div class="bubble">¡Primero el <b>diagnóstico</b>! 🩺</div></div>
+    <div class="kai-row"><div class="kai-wrap">${kaiSVG('happy')}</div><div class="bubble">¡Primero el <b>diagnóstico</b>!&nbsp;🩺</div></div>
     <p>Son ${DIAG_LEN} preguntas de todos los apartados. Con ellas sé qué dominas ya y qué no, y así la práctica se centra desde el principio en lo que más te hace falta.</p>
     <button class="btn" data-a="go">${S.cur?.type === 'diag' ? 'Continuar el diagnóstico' : 'Empezar el diagnóstico'}</button>
     <button class="btn ghost" data-a="close">Ahora no</button>`, (el, close) => {
@@ -666,7 +723,7 @@ function answer(k) {
   fb.innerHTML = `
     <div class="feedback ${it.ok ? 'ok' : 'ko'}">
       <div class="fb-head"><div class="mini-kai">${kaiSVG()}</div><span>${it.ok ? rand(OK_MSGS) : rand(KO_MSGS)}</span></div>
-      <div class="quote">📖 ${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
+      <div class="quote">📖&nbsp;${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
       <button class="book-btn" data-q="${esc(q.id)}">🔎 Llévame al libro</button>
     </div>
     <div class="sticky-bottom"><button class="btn" id="next">${sess.i + 1 >= sess.len ? 'Ver resultados' : 'Siguiente'}</button></div>`;
@@ -729,7 +786,7 @@ async function openBook(qid) {
       <img src="${esc(img)}" alt="Página ${esc(pag)} del libro" decoding="sync">
       ${rects.map(([x, y, w, h]) => `<i class="v-hl" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"></i>`).join('')}
     </div></div>
-    <div class="v-quote">📖 ${fmtQuote(q.fuente)}</div>`;
+    <div class="v-quote">📖&nbsp;${fmtQuote(q.fuente)}</div>`;
   document.body.appendChild(viewerEl);
   lockScroll();
   guardTaps(viewerEl);
@@ -836,7 +893,7 @@ function showResults() {
   let title, mood, msg;
   if (sess.type === 'sim') {
     const passed = score >= GOAL_SIM;
-    title = passed ? '¡Simulacro aprobado! 🎉' : 'Simulacro terminado';
+    title = passed ? '¡Simulacro aprobado!&nbsp;🎉' : 'Simulacro terminado';
     mood = passed ? 'celebrate' : 'think';
     msg = passed ? `¡Has sacado un ${pct(score)}%! Eso es nivel examen.` : `Has sacado un ${pct(score)}%. Necesitas un ${pct(GOAL_SIM)}% para darlo por superado. Repasa los fallos de abajo y vuelve a intentarlo.`;
   } else if (sess.type === 'diag') {
@@ -845,11 +902,11 @@ function showResults() {
     msg = score >= 0.7 ? `¡Partes de un ${pct(score)}%! Ya sabes mucho. Ahora vamos a pulir lo que falta.`
       : `Has acertado un ${pct(score)}%. ¡Perfecto para empezar! Ya sé por dónde tenemos que ir.`;
   } else if (sess.type === 'fallos' && !failedIds().length) {
-    title = '¡Fallos corregidos! 🎉';
+    title = '¡Fallos corregidos!&nbsp;🎉';
     mood = 'celebrate';
     msg = 'Has corregido todos tus fallos pendientes. ¡Así se hace! Sigue estudiando para ver temario nuevo.';
   } else {
-    title = score >= 0.8 ? '¡Rondón! 🔥' : score >= 0.5 ? '¡Buena ronda!' : 'Ronda terminada';
+    title = score >= 0.8 ? '¡Rondón!&nbsp;🔥' : score >= 0.5 ? '¡Buena ronda!' : 'Ronda terminada';
     mood = score >= 0.5 ? 'happy' : 'talk';
     msg = score >= 0.8 ? `Un ${pct(score)}% de aciertos. ¡Estás que te sales!` : score >= 0.5 ? 'Vas por buen camino. Los fallos te los volveré a preguntar.' : 'Tranquila: justo para esto estamos. Lo que has fallado volverá hasta que te salga solo.';
   }
@@ -871,7 +928,7 @@ function showResults() {
         <div class="q">${esc(q.pregunta)}</div>
         <div class="a ko">✗ Tu respuesta: ${esc(q.opciones[it.chosen])}</div>
         <div class="a ok">✓ Correcta: ${esc(q.opciones[q.correcta])}</div>
-        <div class="quote">📖 ${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
+        <div class="quote">📖&nbsp;${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
         <button class="book-btn" data-q="${esc(q.id)}">🔎 Llévame al libro</button>
       </div>`;
     }).join('')}` : '';
@@ -922,12 +979,12 @@ function showReady() {
     <div class="screen onb ready-screen">
       <div class="kai-big">${kaiSVG()}</div>
       <div class="bubble">
-        <p style="font-size:24px"><b>¡Estás lista, ${NAME}!</b> 🎉</p>
+        <p style="font-size:24px"><b>¡Estás lista, ${NAME}!</b>&nbsp;🎉</p>
         <p>Tu previsión de nota es de un <b>${pct(r.all)}%</b> y en los simulacros vas con un <b>${pct(r.lastSim)}%</b>.</p>
         <p>Ya puedes dejar de estudiar e ir al examen tranquila. ¡Vas a bordarlo!</p>
-        <p>${CREATOR} y yo estamos muy orgullosos de ti 💙</p>
+        <p>${CREATOR} y yo estamos muy orgullosos de ti&nbsp;💙</p>
       </div>
-      <div class="btn-col"><button class="btn" id="ok">¡Gracias, KAI! 🤖</button></div>
+      <div class="btn-col"><button class="btn" id="ok">¡Gracias, KAI!&nbsp;🤖</button></div>
     </div>`, 'celebrate');
   confetti();
   app.querySelector('#ok').onclick = showHome;
@@ -1013,6 +1070,7 @@ async function init() {
   }
   S = load();
   try { navigator.storage?.persist?.(); } catch (e) { /* opcional */ }
+  if (needsInstallHelp() && !browserAllowed()) return showInstallGate(0);
   if (S.onboarded) showHome(); else showOnboarding(0);
 }
 
