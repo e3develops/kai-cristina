@@ -7,7 +7,7 @@ import { needsInstallHelp, inAppBrowser, isIPad, art1, art2, art3, art4 } from '
 const NAME = 'Cristina';
 const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
-const VERSION = '28/09 19:39'; // se muestra al pie para comprobar qué versión se está usando
+const VERSION = '28/09 19:47'; // se muestra al pie para comprobar qué versión se está usando
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
@@ -313,10 +313,11 @@ function installSteps() {
     { mood: 'think', end: true, html: `<p>Estás dentro de otra app y desde aquí no puedo funcionar.</p><p>Toca <b>···</b> (o la brújula) y elige <b>“Abrir en Safari”</b>. Allí te enseño cómo ponerme en tu pantalla de inicio&nbsp;📲</p>` },
   ];
   return [
-    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>!&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio. ${CREATOR} me ha creado para ayudarte con tus exámenes&nbsp;💙</p>` },
-    { mood: 'talk', html: `<p>Primero, ponme en tu <b>pantalla de inicio</b>&nbsp;📲</p><p>Solo funciono desde mi icono: así me abres como una app, a pantalla completa, sin internet y con tu progreso siempre a salvo. Son 3 toques.</p>` },
-    { art: art1, html: `<p><b>1.</b> Toca el botón <b>Compartir</b> de Safari (el cuadrado con la flecha hacia arriba), ${isIPad ? 'arriba a la derecha' : 'en la barra de abajo'}.</p>${isIPad ? '' : '<p class="muted small">Si no lo ves, toca antes <b>···</b></p>'}` },
-    { art: art2, html: `<p><b>2.</b> Desliza la lista hacia abajo y toca <b>“Añadir a pantalla de inicio”</b>.</p>` },
+    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>!&nbsp;👋 Soy <b>KAI</b>, tu robot de estudio. ${CREATOR} me ha creado para ayudarte con tus exámenes&nbsp;💙</p><p>Venga, vamos a instalarme en tu <b>pantalla de inicio</b> para que me tengas siempre a mano. Te enseño&nbsp;📲</p>` },
+    { art: art1, html: isIPad
+        ? `<p><b>1.</b> Toca el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba), arriba a la derecha.</p>`
+        : `<p><b>1.</b> Toca los tres puntos <b>···</b> abajo a la derecha y después <b>Compartir</b>.</p><p class="muted small">Si ya ves el botón Compartir (el cuadrado con la flecha) en la barra, tócalo directamente.</p>` },
+    { art: art2, html: `<p><b>2.</b> Desliza la lista hacia abajo y toca <b>“Añadir a pantalla de inicio”</b>.</p><p class="muted small">Si no aparece, toca antes “Ver más”.</p>` },
     { art: art3, html: `<p><b>3.</b> Deja activado <b>“Abrir como app web”</b> (si aparece) y pulsa <b>Añadir</b>, arriba a la derecha.</p>` },
     { art: art4, end: true, html: `<p><b>¡Listo!</b>&nbsp;🎉 Ahora cierra Safari y <b>ábreme desde mi icono</b> en tu pantalla de inicio. ¡Allí te espero!</p>` },
   ];
@@ -339,7 +340,7 @@ function showInstallGate(i = 0) {
     </div>`, st.mood);
   app.querySelector('#next')?.addEventListener('click', () => showInstallGate(i + 1));
   app.querySelector('#prev')?.addEventListener('click', () => showInstallGate(i - 1));
-  app.querySelector('#again')?.addEventListener('click', () => showInstallGate(inAppBrowser ? 0 : 2));
+  app.querySelector('#again')?.addEventListener('click', () => showInstallGate(inAppBrowser ? 0 : 1));
   // Puerta trasera para pruebas: 5 toques seguidos sobre la ilustración del último paso
   if (st.end) {
     let taps = 0, t0 = 0;

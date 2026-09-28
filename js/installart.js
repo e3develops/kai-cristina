@@ -52,20 +52,36 @@ const safariPage = `
   <rect x="20" y="142" width="160" height="30" rx="10" fill="${HL}"/>
   <rect x="68" y="154" width="64" height="7" rx="3.5" fill="#fff" opacity=".9"/>`;
 
+// Número dentro de un círculo (orden de los toques dentro de una misma ilustración)
+const badge = (x, y, n) => `<circle cx="${x}" cy="${y}" r="8" fill="${HL}" stroke="#fff" stroke-width="2"/><text x="${x}" y="${y + 3.5}" ${F} font-size="10" font-weight="800" fill="#fff" text-anchor="middle">${n}</text>`;
+const menuRow = (y, label, icon, hl = false) => `
+  ${hl ? `<rect x="76" y="${y}" width="110" height="24" rx="8" fill="#D5F3EC" stroke="${HL}" stroke-width="2.2"/>` : ''}
+  <text x="86" y="${y + 16}" ${F} font-size="10" fill="#1C1C1E" font-weight="${hl ? 700 : 400}">${label}</text>
+  <g transform="translate(164 ${y + 5})" stroke="${hl ? BLUE : '#1C1C1E'}" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round">${icon}</g>`;
+
+// Paso 1: en la barra de Safari, tocar ··· y luego "Compartir" (Safari de iOS 26; en versiones
+// anteriores el botón Compartir está directamente en la barra)
 export const art1 = phone(`
   ${safariPage}
-  <rect x="0" y="206" width="200" height="94" fill="#F7F7F9"/>
-  <line x1="0" y1="206" x2="200" y2="206" stroke="#E5E5EA"/>
-  <rect x="14" y="216" width="172" height="30" rx="10" fill="#E9E9EE"/>
-  <text x="100" y="235" ${F} font-size="10" fill="#3C3C43" text-anchor="middle">🔒 e3develops.github.io</text>
-  <g stroke="${BLUE}" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M31 262 l-6 7 6 7"/>
-    <path d="M62 262 l6 7 -6 7" opacity=".35"/>
-    <path d="M100 258 v12"/><path d="M95 262 l5 -5 5 5"/><path d="M94 265 h-2 v12 h16 v-12 h-2"/>
-    <path d="M131 262 q7 -3 7 0 v13 q0 -3 -7 0 z M145 262 q-7 -3 -7 0"/>
-    <rect x="163" y="261" width="12" height="12" rx="2.5"/><path d="M167 258 h10 v10"/>
-  </g>
-  ${tap(100, 267)}`);
+  <rect x="0" y="0" width="200" height="300" fill="#000" opacity=".12"/>
+  <rect x="0" y="246" width="200" height="54" fill="#F7F7F9"/>
+  <circle cx="24" cy="268" r="14" fill="#fff" stroke="#E5E5EA"/>
+  <path d="M27 262 l-6 6 6 6" stroke="#1C1C1E" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="44" y="254" width="110" height="28" rx="14" fill="#fff" stroke="#E5E5EA"/>
+  <text x="99" y="272" ${F} font-size="9.5" fill="#3C3C43" text-anchor="middle">e3develops.github.io</text>
+  <circle cx="176" cy="268" r="14" fill="#fff" stroke="#E5E5EA"/>
+  <g fill="#1C1C1E"><circle cx="170" cy="268" r="1.9"/><circle cx="176" cy="268" r="1.9"/><circle cx="182" cy="268" r="1.9"/></g>
+  ${tap(176, 268, 16)}
+  ${badge(160, 250, 1)}
+  <rect x="70" y="122" width="122" height="116" rx="14" fill="#fff" style="filter:drop-shadow(0 4px 10px rgba(0,0,0,.18))"/>
+  ${menuRow(128, 'Compartir', '<path d="M7 1 v9"/><path d="M4 4 l3 -3 3 3"/><path d="M3 7 h-1 v7 h10 v-7 h-1"/>', true)}
+  <line x1="80" y1="156" x2="186" y2="156" stroke="#E5E5EA"/>
+  ${menuRow(158, 'Favoritos', '<path d="M7 1 l1.8 4 4.2 .4 -3.2 2.8 1 4.2 -3.8 -2.3 -3.8 2.3 1 -4.2 -3.2 -2.8 4.2 -.4 z"/>')}
+  <line x1="80" y1="184" x2="186" y2="184" stroke="#E5E5EA"/>
+  ${menuRow(186, 'Añadir marcador', '<path d="M3 1 h8 v12 l-4 -3 -4 3 z"/>')}
+  <line x1="80" y1="212" x2="186" y2="212" stroke="#E5E5EA"/>
+  ${menuRow(213, 'Nueva pestaña', '<rect x="1" y="1" width="12" height="12" rx="3"/><path d="M7 4 v6 M4 7 h6"/>')}
+  ${badge(68, 128, 2)}`);
 
 // Paso 2: menú Compartir con "Añadir a pantalla de inicio"
 const row = (y, label, icon, hl = false) => `
