@@ -11,11 +11,26 @@ TEMAS = [
 ]
 FIELDS = ["id", "tema", "seccion", "concepto", "pregunta", "opciones", "correcta", "fuente", "pagina"]
 
+# Correcciones de la revisión de contenido (opcional)
+corr_path = os.path.join(ROOT, "fuentes", "preguntas", "_correcciones.json")
+corr = {"eliminar": [], "modificar": {}}
+if os.path.exists(corr_path):
+    with open(corr_path, encoding="utf-8") as f:
+        corr.update(json.load(f))
+eliminar = set(corr.get("eliminar", []))
+modificar = corr.get("modificar", {})
+
 preguntas, errores = [], []
 for path in sorted(glob.glob(os.path.join(ROOT, "fuentes", "preguntas", "*.json"))):
+    if os.path.basename(path).startswith("_"):
+        continue
     with open(path, encoding="utf-8") as f:
         items = json.load(f)
     for q in items:
+        if q.get("id") in eliminar:
+            continue
+        if q.get("id") in modificar:
+            q = {**q, **modificar[q["id"]]}
         falta = [k for k in FIELDS if k not in q]
         if falta:
             errores.append(f"{os.path.basename(path)} {q.get('id')}: faltan {falta}")

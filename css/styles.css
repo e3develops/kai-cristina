@@ -21,6 +21,8 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+button, .tema, .sec-row { touch-action: manipulation; }
+@property --p { syntax: '<number>'; inherits: false; initial-value: 0; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--font);
@@ -194,7 +196,7 @@ p { margin: 0; line-height: 1.5; }
 
 /* ---------- Quiz ---------- */
 .qtop { display: flex; align-items: center; gap: 12px; }
-.qtop .close { appearance: none; border: 0; background: none; font-size: 26px; color: var(--ink-3); cursor: pointer; padding: 4px 6px; line-height: 1; }
+.qtop .close { appearance: none; border: 0; background: none; font-size: 26px; color: var(--ink-3); cursor: pointer; width: 44px; height: 44px; margin-left: -8px; line-height: 1; }
 .qtop .bar { flex: 1; height: 14px; }
 .qtop .count { font-weight: 800; color: var(--ink-2); font-size: 14px; min-width: 44px; text-align: right; }
 .qmeta { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -263,3 +265,16 @@ p { margin: 0; line-height: 1.5; }
 
 .loading { flex: 1; display: grid; place-items: center; text-align: center; gap: 12px; }
 .loading .kai-mid { width: 150px; margin: 0 auto; }
+
+/* Pantallas estrechas (iPhone SE y similares) */
+@media (max-width: 360px) {
+  .ready-card { flex-direction: column; align-items: flex-start; }
+  .question { font-size: 18px; }
+}
+@media (max-height: 700px) {
+  .onb .kai-big { width: min(44vw, 170px); }
+}
+/* iPad / ordenador: un poco más de aire */
+@media (min-width: 700px) {
+  .kai-row .kai-wrap { width: 120px; flex-basis: 120px; }
+}

@@ -43,7 +43,14 @@ function freshState() {
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE));
-    if (s && s.v === 1) return s;
+    if (s && s.v === 1) {
+      const st = { ...freshState(), ...s };
+      if (!st.c || typeof st.c !== 'object') st.c = {};
+      if (!st.q || typeof st.q !== 'object') st.q = {};
+      if (!Array.isArray(st.sims)) st.sims = [];
+      st.n = Number(st.n) || 0;
+      return st;
+    }
   } catch (e) { /* almacenamiento no disponible */ }
   return freshState();
 }
@@ -59,7 +66,7 @@ const mastered = id => (S.c[id]?.streak || 0) >= MASTERY_STREAK;
 
 function conceptIds(filter = {}) {
   return Object.values(CONCEPTS)
-    .filter(c => (!filter.tema || c.tema === filter.tema) && (!filter.seccion || c.seccion === filter.seccion))
+    .filter(c => (!filter.tema || c.tema === filter.tema) && (!filter.sec || c.sec === filter.sec))
     .map(c => c.id);
 }
 function seenCount(filter = {}) {
@@ -68,26 +75,30 @@ function seenCount(filter = {}) {
 function failedIds(filter = {}) {
   return conceptIds(filter).filter(id => stat(id)?.lastOk === false);
 }
+const secKey = q => `${q.tema}|${q.seccion}`;
+const secName = key => key.slice(key.indexOf('|') + 1);
+// Claves de apartado (tema|sección) en orden de aparición
 function sections(tema) {
   const seen = new Set();
   const out = [];
   for (const p of DATA.preguntas) {
     if (tema && p.tema !== tema) continue;
-    if (!seen.has(p.seccion)) { seen.add(p.seccion); out.push(p.seccion); }
+    const k = secKey(p);
+    if (!seen.has(k)) { seen.add(k); out.push(k); }
   }
   return out;
 }
-// Debilidad de una sección: 1 - precisión (con suavizado)
-function weakness(seccion) {
+// Debilidad de un apartado: proporción (suavizada) de sus conceptos cuyo último intento fue fallo
+function weakness(sec) {
   let ok = 0, ko = 0;
-  for (const id of conceptIds({ seccion })) { const s = stat(id); if (s) { ok += s.ok; ko += s.ko; } }
+  for (const id of conceptIds({ sec })) { const s = stat(id); if (s) { if (s.lastOk) ok++; else ko++; } }
   return 1 - (ok + 1) / (ok + ko + 2);
 }
 
 // Probabilidad estimada de acertar un concepto en el examen
 function conceptP(id) {
   const s = stat(id);
-  if (!s) return 0.9 * (1 - weakness(CONCEPTS[id].seccion)); // no visto: se estima por su apartado
+  if (!s) return 0.9 * (1 - weakness(CONCEPTS[id].sec)); // no visto: se estima por su apartado
   if (s.streak >= MASTERY_STREAK) return 0.95;
   if (s.streak === 1) return 0.8;
   return s.ok ? 0.45 : 0.3; // último intento fallado
@@ -164,7 +175,7 @@ function pickConcept(pool, recent) {
 }
 function pickWeakSection(ids) {
   const bySec = {};
-  for (const id of ids) (bySec[CONCEPTS[id].seccion] ||= []).push(id);
+  for (const id of ids) (bySec[CONCEPTS[id].sec] ||= []).push(id);
   const secs = Object.keys(bySec);
   const w = secs.map(s => Math.pow(weakness(s), 2) + 0.05);
   let r = Math.random() * w.reduce((a, b) => a + b, 0);
@@ -181,7 +192,7 @@ function pickQuestion(cid, avoid) {
 
 function buildDiag() {
   const secs = shuffle(sections());
-  const bySec = Object.fromEntries(secs.map(s => [s, shuffle(conceptIds({ seccion: s }))]));
+  const bySec = Object.fromEntries(secs.map(s => [s, shuffle(conceptIds({ sec: s }))]));
   const out = [];
   let round = 0;
   while (out.length < DIAG_LEN && round < 50) {
@@ -217,10 +228,19 @@ function homeMessage(r) {
 // ------------------------------------------------------------------
 // Pantallas
 // ------------------------------------------------------------------
+let readyTimer = null;
+// Bloquea los toques unos ms tras cada cambio de pantalla: evita que un doble toque
+// "atraviese" y pulse lo que aparece debajo del dedo en la pantalla nueva
+function guardTaps(el, ms = 400) {
+  el.style.pointerEvents = 'none';
+  setTimeout(() => { el.style.pointerEvents = ''; }, ms);
+}
 function render(html, mood) {
+  clearTimeout(readyTimer);
   app.innerHTML = html;
   if (mood) setKaiMood(app, mood);
   window.scrollTo(0, 0);
+  guardTaps(app);
 }
 
 // ---------- Onboarding ----------
@@ -281,7 +301,7 @@ function showHome() {
       </div>`;
   }).join('');
 
-  const main = S.diag
+  const main = (S.diag || S.n > 0)
     ? `<button class="btn" id="study">Seguir estudiando<span class="sub">KAI elige las preguntas por ti</span></button>`
     : `<button class="btn" id="diag">Empezar diagnóstico<span class="sub">${DIAG_LEN} preguntas · unos 5 minutos</span></button>`;
 
@@ -299,7 +319,7 @@ function showHome() {
 
       <div class="card">
         <div class="ready-card">
-          <div class="ring" style="--p:${pct(r.all)}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${pct(r.all)}%</b><span>nota est.</span></div></div>
+          <div class="ring" style="--p:${S.n ? pct(r.all) : 0}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${S.n ? pct(r.all) + '%' : '—'}</b><span>nota est.</span></div></div>
           <div>
             <h3>${r.ready ? '¡Lista para el examen! 🎉' : 'Preparación para el examen'}</h3>
             <ul class="checks">${checks}</ul>
@@ -338,6 +358,7 @@ function modal(html, bind) {
   bg.innerHTML = `<div class="modal">${html}</div>`;
   bg.addEventListener('click', e => { if (e.target === bg) bg.remove(); });
   document.body.appendChild(bg);
+  guardTaps(bg);
   bind(bg, () => bg.remove());
 }
 function showMenu() {
@@ -372,11 +393,11 @@ function confirmSim() {
 function showProgress() {
   const blocks = DATA.temas.map(t => {
     const rows = sections(t.id).map(sec => {
-      const d = estimate({ seccion: sec });
-      const total = conceptIds({ seccion: sec }).length;
-      const m = seenCount({ seccion: sec });
+      const d = estimate({ sec });
+      const total = conceptIds({ sec }).length;
+      const m = seenCount({ sec });
       return `<div class="sec-row" data-sec="${esc(sec)}">
-        <div class="t">${esc(sec)} <span>${pct(d)}% · ${m}/${total} vistos</span></div>
+        <div class="t">${esc(secName(sec))} <span>${pct(d)}% · ${m}/${total} vistos</span></div>
         <div class="bar ${d < GOAL_TEMA ? 'warn' : ''}"><i style="width:${pct(d)}%"></i></div>
       </div>`;
     }).join('');
@@ -389,14 +410,14 @@ function showProgress() {
       ${blocks}
     </div>`);
   app.querySelector('#back').onclick = showHome;
-  app.querySelectorAll('.sec-row').forEach(el => el.addEventListener('click', () => startSession('practice', { seccion: el.dataset.sec })));
+  app.querySelectorAll('.sec-row').forEach(el => el.addEventListener('click', () => startSession('practice', { sec: el.dataset.sec })));
 }
 
 // ---------- Sesión de test ----------
 function startSession(type, filter = {}) {
   let fixed = null;
   let pool = conceptIds(filter);
-  let len = SESSION_LEN;
+  let len = Math.min(SESSION_LEN, Math.max(5, pool.length * 2));
   if (type === 'diag') { fixed = buildDiag(); len = fixed.length; }
   if (type === 'sim') { fixed = buildSim(); len = fixed.length; }
   if (type === 'fallos') {
@@ -404,11 +425,24 @@ function startSession(type, filter = {}) {
     len = fixed.length;
     if (!len) return showHome();
   }
-  sess = { type, filter, pool, fixed, len, i: 0, items: [], recent: [], startMastered: new Set(conceptIds().filter(mastered)) };
+  sess = { type, filter, pool, fixed, len, i: 0, items: [], recent: [], reins: {}, startMastered: new Set(conceptIds().filter(mastered)) };
+  try { history.pushState({ kai: 'quiz' }, ''); } catch (e) { /* sin historial */ }
   nextQuestion();
 }
 
+function quitSession() {
+  sess = null;
+  showHome();
+}
+// Botón/gesto "atrás" durante una ronda: preguntar antes de salir
+window.addEventListener('popstate', () => {
+  if (!sess || !app.querySelector('.qtop')) return;
+  if (sess.i === 0 || confirm('¿Salir de esta ronda? Lo que ya has respondido queda guardado.')) quitSession();
+  else { try { history.pushState({ kai: 'quiz' }, ''); } catch (e) { /* sin historial */ } }
+});
+
 function nextQuestion() {
+  if (!sess) return;
   if (sess.i >= sess.len) return showResults();
   let qid;
   if (sess.fixed) qid = sess.fixed[sess.i];
@@ -451,12 +485,17 @@ function renderQuestion() {
     </div>`);
 
   app.querySelector('#quit').onclick = () => {
-    if (sess.i === 0 || confirm('¿Salir de esta ronda? Lo que ya has respondido queda guardado.')) showHome();
+    const msg = sess.type === 'sim'
+      ? '¿Salir del simulacro? Tus respuestas cuentan para el repaso, pero la nota del simulacro solo se guarda si lo terminas.'
+      : '¿Salir de esta ronda? Lo que ya has respondido queda guardado.';
+    if (sess.i === 0 || confirm(msg)) quitSession();
   };
+  sess.readyAt = Date.now() + 350; // ignora toques que llegan pegados al cambio de pregunta
   app.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => answer(Number(b.dataset.k))));
 }
 
 function answer(k) {
+  if (!sess || Date.now() < sess.readyAt) return;
   const it = sess.items[sess.i];
   if (it.chosen !== null) return;
   const q = Q[it.qid];
@@ -469,7 +508,8 @@ function answer(k) {
 
   if (sess.type === 'sim') {
     btns[k].classList.add('selected');
-    setTimeout(() => { sess.i++; nextQuestion(); }, 280);
+    const s = sess;
+    setTimeout(() => { if (sess !== s) return; sess.i++; nextQuestion(); }, 280);
     return;
   }
 
@@ -481,7 +521,9 @@ function answer(k) {
   });
 
   // En "repasar fallos", si vuelve a fallar se repite más adelante en la misma ronda
-  if (sess.type === 'fallos' && !it.ok && sess.len < 25) {
+  const reins = sess.reins[q.concepto] || 0;
+  if (sess.type === 'fallos' && !it.ok && reins < 2 && sess.len < 25 && sess.fixed.length - sess.i > 1) {
+    sess.reins[q.concepto] = reins + 1;
     sess.fixed.splice(Math.min(sess.i + 4, sess.fixed.length), 0, pickQuestion(q.concepto, it.qid));
     sess.len = sess.fixed.length;
   }
@@ -494,8 +536,15 @@ function answer(k) {
     </div>
     <div class="sticky-bottom"><button class="btn" id="next">${sess.i + 1 >= sess.len ? 'Ver resultados' : 'Siguiente'}</button></div>`;
   setKaiMood(fb, it.ok ? 'happy' : 'sad');
-  fb.querySelector('#next').onclick = () => { sess.i++; nextQuestion(); };
-  setTimeout(() => fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+  fb.querySelector('#next').onclick = () => { if (!sess) return; sess.i++; nextQuestion(); };
+  guardTaps(fb);
+  // Desplaza lo justo para ver la corrección, sin sacar la pregunta de la pantalla
+  setTimeout(() => {
+    const top = fb.getBoundingClientRect().top;
+    const qTop = app.querySelector('.question')?.getBoundingClientRect().top ?? 0;
+    const need = top - window.innerHeight * 0.55;
+    if (need > 0) window.scrollBy({ top: Math.min(need, Math.max(0, qTop - 8)), behavior: 'smooth' });
+  }, 60);
 }
 
 function sourceLabel(q) {
@@ -537,12 +586,13 @@ function showResults() {
 
   const diagSecs = sess.type === 'diag' ? (() => {
     const bySec = {};
-    for (const it of items) { const s = Q[it.qid].seccion; (bySec[s] ||= [0, 0]); bySec[s][1]++; if (it.ok) bySec[s][0]++; }
+    for (const it of items) { const s = secKey(Q[it.qid]); (bySec[s] ||= [0, 0]); bySec[s][1]++; if (it.ok) bySec[s][0]++; }
     return `<div class="card"><h3>Cómo vas por apartados</h3>${Object.entries(bySec).map(([s, [o, t]]) =>
-      `<div class="sec-row" style="cursor:default"><div class="t">${esc(s)} <span>${o}/${t}</span></div><div class="bar ${o / t < 0.6 ? 'warn' : ''}"><i style="width:${pct(o / t)}%"></i></div></div>`).join('')}</div>`;
+      `<div class="sec-row" style="cursor:default"><div class="t">${esc(secName(s))} <span>${o}/${t}</span></div><div class="bar ${o / t < 0.6 ? 'warn' : ''}"><i style="width:${pct(o / t)}%"></i></div></div>`).join('')}</div>`;
   })() : '';
 
-  const wrong = items.filter(it => !it.ok);
+  const seenWrong = new Set();
+  const wrong = items.filter(it => !it.ok && !seenWrong.has(it.qid) && seenWrong.add(it.qid));
   const review = wrong.length ? `
     <div class="section-title"><h2>${sess.type === 'sim' ? 'Repasa estos fallos' : 'Lo que has fallado'}</h2></div>
     ${wrong.map(it => {
@@ -579,18 +629,19 @@ function showResults() {
     </div>`, mood);
 
   const type = sess.type, filter = sess.filter;
+  sess = null;
   app.querySelector('#again').onclick = () => {
     if (type === 'diag') return startSession('practice');
     if (type === 'fallos' && !failedIds().length) return showHome();
     startSession(type, filter);
   };
   app.querySelector('#home').onclick = () => (r.ready && !S.readyShown) ? showReady() : showHome();
-  if (r.ready && !S.readyShown) setTimeout(showReady, 2200);
+  if (r.ready && !S.readyShown) readyTimer = setTimeout(showReady, 2200);
 }
 
 // ---------- ¡Estás lista! ----------
 function showReady() {
-  if (S.readyShown && app.querySelector('.ready-screen')) return;
+  if (S.readyShown) return;
   S.readyShown = true;
   save();
   const r = readiness();
@@ -639,12 +690,19 @@ async function init() {
   }
   for (const p of DATA.preguntas) {
     Q[p.id] = p;
-    (CONCEPTS[p.concepto] ||= { id: p.concepto, tema: p.tema, seccion: p.seccion, qs: [] }).qs.push(p.id);
+    (CONCEPTS[p.concepto] ||= { id: p.concepto, tema: p.tema, seccion: p.seccion, sec: secKey(p), qs: [] }).qs.push(p.id);
   }
   S = load();
   try { navigator.storage?.persist?.(); } catch (e) { /* opcional */ }
   if (S.onboarded) showHome(); else showOnboarding(0);
 }
+
+document.addEventListener('keydown', e => {
+  if (!sess || !app.querySelector('.qtop') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = '1234'.indexOf(e.key) >= 0 ? '1234'.indexOf(e.key) : 'abcd'.indexOf(e.key.toLowerCase());
+  if (k >= 0 && e.key.length === 1) { app.querySelectorAll('.opt')[k]?.click(); return; }
+  if (e.key === 'Enter') app.querySelector('#next')?.click();
+});
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
