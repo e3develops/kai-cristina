@@ -1,6 +1,6 @@
 // Precarga todo para que funcione sin conexión. Luego: red primero (con límite de tiempo)
 // para recibir siempre las preguntas nuevas, y caché como respaldo.
-const CACHE = 'kai-v3';
+const CACHE = 'kai-v4';
 const CORE = [
   './', 'index.html', 'css/styles.css', 'js/app.js', 'js/kai.js', 'data/preguntas.json',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
@@ -27,7 +27,8 @@ function withTimeout(promise, ms) {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    withTimeout(fetch(e.request), 4000)
+    // no-cache: pregunta siempre al servidor si hay versión nueva (GitHub Pages permite cachear 10 min)
+    withTimeout(fetch(e.request, new URL(e.request.url).origin === self.location.origin ? { cache: 'no-cache' } : {}), 4000)
       .then(res => {
         if (res.ok) {
           const copy = res.clone();

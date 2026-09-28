@@ -6,6 +6,7 @@ import { kaiSVG, setKaiMood } from './kai.js';
 const NAME = 'Cristina';
 const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
+const VERSION = '28/09 19:25'; // se muestra al pie para comprobar qué versión se está usando
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
@@ -415,7 +416,7 @@ function showHome() {
       <div class="section-title"><h2>Temas</h2><span class="muted small">${S.diag ? 'Toca uno para practicarlo' : '🔒 Tras el diagnóstico'}</span></div>
       ${temas}
 
-      <div class="footer">Hecho con 💙 por ${CREATOR} · KAI v1</div>
+      <div class="footer">Hecho con 💙 por ${CREATOR} · KAI · versión ${VERSION}</div>
     </div>`, r.ready ? 'happy' : 'talk');
 
   app.querySelector('#resume')?.addEventListener('click', resumeSession);
@@ -978,7 +979,7 @@ document.addEventListener('keydown', e => {
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {}));
 }
 
 init();
