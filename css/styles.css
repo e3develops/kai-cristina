@@ -305,3 +305,5 @@ p { margin: 0; line-height: 1.5; }
 .sec-nums span:last-child { color: var(--ink-3); }
 .tile.locked, .tema.locked { opacity: .55; }
 .tile.locked b::after, .tema.locked .name::after { content: ' 🔒'; }
+.update-bar { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 80; display: flex; align-items: center; gap: 12px; justify-content: space-between; background: var(--ink); color: #fff; padding: 12px 14px; border-radius: 16px; font-weight: 800; font-size: 14px; box-shadow: var(--shadow); animation: vFade .3s ease; }
+.update-bar button { appearance: none; border: 0; background: var(--accent); color: #fff; font-family: inherit; font-weight: 900; font-size: 14px; padding: 10px 14px; border-radius: 12px; cursor: pointer; }

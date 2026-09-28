@@ -6,7 +6,7 @@ import { kaiSVG, setKaiMood } from './kai.js';
 const NAME = 'Cristina';
 const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
-const VERSION = '28/09 19:25'; // se muestra al pie para comprobar qué versión se está usando
+const VERSION = '28/09 19:24'; // se muestra al pie para comprobar qué versión se está usando
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
@@ -952,8 +952,54 @@ function confetti() {
 // ------------------------------------------------------------------
 // Arranque
 // ------------------------------------------------------------------
+// ---------- Actualizaciones: nunca usar una versión antigua ----------
+// version.json se publica con cada cambio; si no coincide con VERSION, esta copia es antigua.
+async function latestVersion() {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3500);
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(t);
+    return res.ok ? (await res.json()).version : null;
+  } catch (e) { return null; } // sin conexión: se usa lo que hay
+}
+async function applyUpdate(latest) {
+  // Evita bucles: como mucho un intento por versión en esta sesión
+  try {
+    const key = `kai-upd-${latest}`;
+    if (sessionStorage.getItem(key)) return false;
+    sessionStorage.setItem(key, '1');
+  } catch (e) { /* sin sessionStorage */ }
+  render(`<div class="screen loading"><div><div class="kai-mid">${kaiSVG()}</div><p class="muted" style="font-weight:800">Descargando la versión nueva de KAI…</p></div></div>`, 'happy');
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  } catch (e) { /* seguimos igualmente */ }
+  location.reload();
+  return true;
+}
+let lastCheck = Date.now();
+document.addEventListener('visibilitychange', async () => {
+  // Al volver a la app tras un rato en segundo plano, volver a comprobar
+  if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 2 * 60 * 1000) return;
+  lastCheck = Date.now();
+  const latest = await latestVersion();
+  if (!latest || latest === VERSION) return;
+  if (!sess && !viewerEl && !document.querySelector('.modal-bg')) return applyUpdate(latest);
+  if (document.querySelector('.update-bar')) return;
+  const bar = document.createElement('div');
+  bar.className = 'update-bar';
+  bar.innerHTML = `<span>✨ Hay una versión nueva de KAI</span><button>Actualizar</button>`;
+  bar.querySelector('button').onclick = () => { persistSess(); applyUpdate(latest); };
+  document.body.appendChild(bar);
+});
+
 async function init() {
-  render(`<div class="screen loading"><div><div class="kai-mid">${kaiSVG()}</div><p class="muted" style="font-weight:800">KAI se está encendiendo…</p></div></div>`, 'think');
+  render(`<div class="screen loading"><div><div class="kai-mid">${kaiSVG()}</div><p class="muted" style="font-weight:800">KAI se está encendiendo…</p><p class="muted small">Comprobando si hay novedades</p></div></div>`, 'think');
+  const [latest] = await Promise.all([latestVersion(), new Promise(r => setTimeout(r, 600))]);
+  if (latest && latest !== VERSION && await applyUpdate(latest)) return;
   try {
     const res = await fetch('data/preguntas.json', { cache: 'no-cache' });
     DATA = await res.json();
