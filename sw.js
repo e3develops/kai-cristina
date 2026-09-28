@@ -1,6 +1,6 @@
 // Precarga todo para que funcione sin conexión. Luego: red primero (con límite de tiempo)
 // para recibir siempre las preguntas nuevas, y caché como respaldo.
-const CACHE = 'kai-v2';
+const CACHE = 'kai-v3';
 const CORE = [
   './', 'index.html', 'css/styles.css', 'js/app.js', 'js/kai.js', 'data/preguntas.json',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',

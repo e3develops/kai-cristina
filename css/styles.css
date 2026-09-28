@@ -285,15 +285,17 @@ p { margin: 0; line-height: 1.5; }
 /* ---------- Visor del libro ---------- */
 .book-btn { appearance: none; border: 2px solid var(--primary); background: #fff; color: var(--primary-2); font-family: inherit; font-weight: 800; font-size: 15px; border-radius: 12px; padding: 10px 14px; cursor: pointer; align-self: flex-start; touch-action: manipulation; }
 .book-btn:active { transform: translateY(1px); }
-.viewer { position: fixed; inset: 0; z-index: 70; background: #1B2528; display: flex; flex-direction: column; animation: fadeIn .2s ease; }
+.viewer { position: fixed; inset: 0; z-index: 70; background: #1B2528; display: flex; flex-direction: column; animation: vFade .2s ease; }
+@keyframes vFade { from { opacity: 0; } to { opacity: 1; } }
+.v-back { appearance: none; border: 2px solid var(--line); background: var(--card); color: var(--ink); font-family: inherit; font-weight: 900; font-size: 16px; height: 44px; padding: 0 14px; border-radius: 14px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
 .v-top { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 10px) 12px 10px; background: var(--card); }
 .v-title { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 15px; }
 .v-title span { font-size: 12px; color: var(--ink-2); font-weight: 700; }
 .v-zoom { display: flex; gap: 6px; }
 .v-zoom .icon-btn, .v-top .icon-btn { box-shadow: none; border: 2px solid var(--line); font-weight: 900; color: var(--ink); }
-.v-scroll { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; }
+.v-scroll { flex: 1; min-height: 0; overflow: auto; }
 .v-page { position: relative; width: 100%; margin: 0 auto; }
 .v-page img { display: block; width: 100%; height: auto; }
-.v-hl { position: absolute; background: rgba(255, 214, 0, .42); mix-blend-mode: multiply; border-radius: 3px; box-shadow: 0 0 0 2px rgba(255, 190, 0, .55); animation: hlPulse 1.6s ease-in-out 2; }
+.v-hl { position: absolute; background: rgba(255, 214, 0, .38); border-radius: 3px; box-shadow: 0 0 0 2px rgba(255, 190, 0, .55); animation: hlPulse 1.6s ease-in-out 2; }
 @keyframes hlPulse { 0%,100% { background: rgba(255, 214, 0, .42); } 50% { background: rgba(255, 160, 0, .7); } }
 .v-quote { background: var(--card); padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px); font-size: 14px; line-height: 1.45; max-height: 28vh; overflow: auto; border-top: 1px solid var(--line); }

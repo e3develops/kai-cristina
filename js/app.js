@@ -104,7 +104,7 @@ function computePrior(sec) {
     if (CONCEPTS[id].sec === sec) { n++; if (s.first) ok++; }
   }
   const g = (gOk + 1) / (gN + 2);
-  return (ok + 3 * g) / (n + 3);
+  return Math.min(0.85, (ok + 3 * g) / (n + 3));
 }
 const weakness = sec => 1 - priorAcc(sec);
 // Sabida: acertada a la primera y nunca fallada, o 2+ aciertos seguidos tras fallarla
@@ -138,7 +138,7 @@ function readiness() {
   const lastSim = last2.length ? last2.reduce((a, x) => a + x.score, 0) / last2.length : null;
   const checks = [
     { ok: all >= GOAL_ALL, label: `Nota estimada de ${pct(GOAL_ALL)}% o más`, info: S.n ? `ahora: ${pct(all)}%` : 'aún sin datos' },
-    { ok: temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Haber trabajado cada tema (${pct(GOAL_COVER)}% visto)`, info: temas.map(t => `${t.corto}: ${pct(t.cov)}%`).join(' · ') },
+    { ok: temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Cada tema: ${pct(GOAL_COVER)}% visto y ${pct(GOAL_TEMA)}% de nota`, info: temas.map(t => `${t.corto}: ${pct(t.cov)}% visto, ${S.n ? pct(t.d) + '%' : '—'} nota`).join(' · ') },
     { ok: lastSim !== null && lastSim >= GOAL_SIM, label: `Simulacros con ${pct(GOAL_SIM)}% o más`, info: lastSim === null ? 'sin hacer' : S.sims.length > 1 ? `media de los 2 últimos: ${pct(lastSim)}%` : `último: ${pct(lastSim)}%` },
   ];
   return { all, temas, lastSim, checks, ready: checks.every(c => c.ok) };
@@ -183,7 +183,7 @@ function pickConcept(pool, recent, preferNew = false) {
   if (preferNew && fresh.length) return pickWeakSection(fresh);
 
   // 1) Fallos que ya tocan (siempre primero)
-  const failed = cands.filter(id => due(id) && !stat(id).lastOk).sort(byDue);
+  const failed = cands.filter(id => due(id) && !stat(id).lastOk).sort((a, b) => stat(b).last - stat(a).last);
   if (failed.length) return failed[0];
   // 2) Fallos recuperados que hay que confirmar
   const confirming = cands.filter(id => due(id) && stat(id).ko > 0 && stat(id).streak < MASTERY_STREAK).sort(byDue);
@@ -242,11 +242,13 @@ const KO_MSGS = ['¡Casi! Mira lo que dice el libro:', 'No pasa nada, te la vuel
 
 function homeMessage(r) {
   const failed = failedIds().length;
+  if (S.cur) return `Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias. Pulsa <b>Continuar</b> para seguir donde lo dejaste.`;
+  if (!S.diag && S.n > 0) return `Cuando quieras, pulsa <b>Seguir estudiando</b> y yo elijo las preguntas. También puedes hacer el <b>diagnóstico</b> completo.`;
   if (!S.diag) return `Te propongo empezar con un <b>diagnóstico</b> de ${DIAG_LEN} preguntas para ver qué sabes ya. ¡Sin presión!`;
   if (r.ready) return `¡Estás <b>lista</b>, ${NAME}! 🎉 Si quieres, sigue repasando un poquito para afianzar.`;
-  const simFailed = S.sims.length && S.sims.at(-1).score < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN;
+  const simFailed = S.sims.length && S.sims.at(-1).score < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN && failedIds().length > 0;
   if (simFailed) return `En el simulacro sacaste un <b>${pct(S.sims.at(-1).score)}%</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo 💪`;
-  const covered = r.checks[1].ok;
+  const covered = r.temas.every(t => t.cov >= GOAL_COVER);
   if (r.all >= GOAL_ALL && covered && r.lastSim === null) return `¡Tu nota estimada es de un <b>${pct(r.all)}%</b>! Es el momento de hacer un <b>simulacro de examen</b>.`;
   if (r.all >= GOAL_ALL && !covered) return `Lo que has visto lo llevas genial (<b>${pct(r.all)}%</b>). Sigue estudiando para cubrir más temario.`;
   if (failed >= 8) return `Tienes <b>${failed}</b> preguntas falladas pendientes. Si sigues estudiando te las iré repitiendo hasta que salgan solas.`;
@@ -361,7 +363,7 @@ function showHome() {
       </div>
 
       ${S.cur ? `<div class="card resume">
-        <div><b>Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias</b><br><span class="muted small">Vas por la pregunta ${Math.min(S.cur.i + 1, S.cur.len)} de ${S.cur.len}</span></div>
+        <div><b>Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias</b><br><span class="muted small">Llevas ${S.cur.items.filter(it => it.chosen !== null).length} de ${S.cur.len} preguntas respondidas</span></div>
         <div class="btn-col"><button class="btn accent" id="resume">Continuar</button><button class="btn ghost" id="discard">Descartar</button></div>
       </div>` : ''}
 
@@ -446,7 +448,7 @@ function showProgress() {
   render(`
     <div class="screen">
       <div class="topbar"><button class="icon-btn" id="back" aria-label="Volver">←</button><h2>Mi progreso</h2><span style="width:42px"></span></div>
-      <p class="muted">La barra es tu nota estimada en cada apartado. Una pregunta cuenta como dominada cuando la aciertas ${MASTERY_STREAK} veces seguidas. Toca un apartado para practicarlo.</p>
+      <p class="muted">La barra es tu nota estimada en cada apartado. Una pregunta cuenta como sabida si la aciertas a la primera, o ${MASTERY_STREAK} veces seguidas después de fallarla. Toca un apartado para practicarlo.</p>
       ${blocks}
     </div>`);
   app.querySelector('#back').onclick = showHome;
@@ -455,6 +457,8 @@ function showProgress() {
 
 // ---------- Sesión de test ----------
 function startSession(type, filter = {}) {
+  if (S.cur && !confirm(`Tienes ${S.cur.type === 'sim' ? 'un simulacro' : S.cur.type === 'diag' ? 'el diagnóstico' : 'una ronda'} a medias. ¿Lo dejas y empiezas otra cosa?`)) return;
+  S.cur = null;
   let fixed = null;
   let pool = conceptIds(filter);
   if (!pool.length) return showHome();
@@ -487,6 +491,12 @@ function resumeSession() {
   try { history.pushState({ kai: 'quiz' }, ''); } catch (e) { /* sin historial */ }
   nextQuestion();
 }
+function quitMsg() {
+  return sess?.type === 'sim'
+    ? '¿Salir del simulacro? Tus respuestas cuentan para el repaso, pero la nota del simulacro solo se guarda si lo terminas.'
+    : '¿Salir de esta ronda? Tus respuestas quedan guardadas, pero la ronda se cierra.';
+}
+const answeredAny = () => sess && sess.items.some(it => it && it.chosen !== null);
 function quitSession() {
   sess = null;
   S.cur = null;
@@ -495,9 +505,10 @@ function quitSession() {
 }
 // Botón/gesto "atrás" durante una ronda: preguntar antes de salir
 window.addEventListener('popstate', () => {
+  if (ignorePop) { ignorePop = false; return; }
   if (viewerEl) return closeBook(true);
   if (!sess || !app.querySelector('.qtop')) return;
-  if (sess.i === 0 || confirm('¿Salir de esta ronda? Lo que ya has respondido queda guardado.')) quitSession();
+  if (!answeredAny() || confirm(quitMsg())) quitSession();
   else { try { history.pushState({ kai: 'quiz' }, ''); } catch (e) { /* sin historial */ } }
 });
 
@@ -540,7 +551,7 @@ function renderQuestion() {
         <div class="bar"><i style="width:${pct(sess.i / sess.len)}%"></i></div>
         <span class="count">${sess.i + 1}/${sess.len}</span>
       </div>
-      <div class="muted small" style="font-weight:800">${labels[sess.type]}${sess.filter?.tema ? ' · ' + esc(DATA.temas.find(t => t.id === sess.filter.tema)?.corto || '') : ''}${sess.filter?.sec ? ' · ' + esc(secName(sess.filter.sec)) : ''}</div>
+      <div class="muted small" style="font-weight:800">${labels[sess.type]}${sess.filter?.tema ? ' · ' + esc(DATA.temas.find(t => t.id === sess.filter.tema)?.corto || '') : ''}${sess.filter?.sec ? ' · ' + esc(DATA.temas.find(t => sess.filter.sec.startsWith(t.id + '|'))?.corto || '') + ' · ' + esc(secName(sess.filter.sec)) : ''}</div>
       <div class="qmeta">${chips}</div>
       <div class="question">${esc(q.pregunta)}</div>
       <div class="options">${opts}</div>
@@ -548,10 +559,7 @@ function renderQuestion() {
     </div>`);
 
   app.querySelector('#quit').onclick = () => {
-    const msg = sess.type === 'sim'
-      ? '¿Salir del simulacro? Tus respuestas cuentan para el repaso, pero la nota del simulacro solo se guarda si lo terminas.'
-      : '¿Salir de esta ronda? Lo que ya has respondido queda guardado.';
-    if (sess.i === 0 || confirm(msg)) quitSession();
+    if (!answeredAny() || confirm(quitMsg())) quitSession();
   };
   sess.readyAt = Date.now() + 350; // ignora toques que llegan pegados al cambio de pregunta
   app.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => answer(Number(b.dataset.k))));
@@ -635,12 +643,13 @@ async function loadHighlights() {
   return HL;
 }
 let viewerEl = null;
+let ignorePop = false; // el history.back() que hacemos al cerrar el visor no debe tocar el test
 function closeBook(fromPop = false) {
   if (!viewerEl) return;
   viewerEl.remove();
   viewerEl = null;
   document.body.style.overflow = '';
-  if (!fromPop) { try { history.back(); } catch (e) { /* sin historial */ } }
+  if (!fromPop) { ignorePop = true; try { history.back(); } catch (e) { ignorePop = false; } }
 }
 async function openBook(qid) {
   const q = Q[qid];
@@ -655,12 +664,12 @@ async function openBook(qid) {
   viewerEl.className = 'viewer';
   viewerEl.innerHTML = `
     <div class="v-top">
-      <button class="icon-btn" data-a="close" aria-label="Cerrar">✕</button>
+      <button class="v-back" data-a="close" aria-label="Volver al test">← Volver</button>
       <div class="v-title"><b>${esc(t ? t.corto : '')} · pág. ${esc(pag)}</b><span>${rects.length ? 'Lo tienes subrayado en amarillo' : 'La frase está en esta página'}</span></div>
       <div class="v-zoom"><button class="icon-btn" data-a="out" aria-label="Alejar">−</button><button class="icon-btn" data-a="in" aria-label="Acercar">+</button></div>
     </div>
     <div class="v-scroll"><div class="v-page">
-      <img src="${esc(img)}" alt="Página ${esc(pag)} del libro">
+      <img src="${esc(img)}" alt="Página ${esc(pag)} del libro" decoding="sync">
       ${rects.map(([x, y, w, h]) => `<i class="v-hl" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"></i>`).join('')}
     </div></div>
     <div class="v-quote">📖 ${fmtQuote(q.fuente)}</div>`;
@@ -763,7 +772,7 @@ function showResults() {
   const pending = failedIds().length;
   let again = { practice: 'Otra ronda', diag: 'Empezar a practicar', fallos: 'Seguir repasando fallos', sim: 'Repetir simulacro' }[sess.type];
   let againType = sess.type;
-  if (sess.type === 'sim' && score < GOAL_SIM && pending) { again = `Repasar fallos (${pending})`; againType = 'fallos'; }
+  if (sess.type === 'sim' && score < GOAL_SIM && pending) { again = `Repasar fallos (${pending} pendientes)`; againType = 'fallos'; }
   if (sess.type === 'fallos' && !pending) { again = 'Seguir estudiando'; againType = 'practice'; }
   if (sess.type === 'diag') againType = 'practice';
 
