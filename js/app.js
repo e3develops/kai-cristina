@@ -9,7 +9,7 @@ const STORE = 'kai-cristina-v1';
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
-const GOAL_ALL = 0.80;    // nota estimada global para estar lista
+const GOAL_ALL = 0.82;    // nota estimada global para estar lista
 const GOAL_TEMA = 0.70;   // nota estimada mínima en cada tema
 const GOAL_COVER = 0.3;   // parte de cada tema que hay que haber trabajado
 const GOAL_SIM = 0.80;    // nota mínima en el último simulacro
@@ -89,7 +89,13 @@ function sections(tema) {
 }
 // Conocimiento previo de un apartado: % de aciertos a la PRIMERA en sus conceptos
 // (suavizado hacia la media global; sin datos → 50%)
+let priorCache = { n: -1, map: {} };
 function priorAcc(sec) {
+  if (priorCache.n !== S.n || priorCache.S !== S) priorCache = { n: S.n, S, map: {} };
+  if (sec in priorCache.map) return priorCache.map[sec];
+  return (priorCache.map[sec] = computePrior(sec));
+}
+function computePrior(sec) {
   let gOk = 0, gN = 0, ok = 0, n = 0;
   for (const id in S.c) {
     const s = S.c[id];
@@ -109,9 +115,10 @@ const mastered = known;
 function conceptP(id) {
   const s = stat(id);
   if (!s) return priorAcc(CONCEPTS[id].sec); // no visto: se estima por lo que sabe de su apartado
-  if (!s.lastOk) return 0.35;                 // último intento fallado
-  if (s.streak >= MASTERY_STREAK) return 0.92;
-  return s.ko === 0 ? 0.85 : 0.7;             // a la primera / recuperada una vez
+  if (!s.lastOk) return 0.5;                  // último intento fallado (ya vio la corrección)
+  if (s.streak >= MASTERY_STREAK) return 0.9;
+  // Acertada a la primera (puede haber sido suerte) / recuperada una vez
+  return s.ko === 0 ? Math.min(0.9, priorAcc(CONCEPTS[id].sec) + 0.15) : 0.8;
 }
 // Nota estimada (0-1) si el examen fuera ahora mismo
 function estimate(filter = {}) {
@@ -126,11 +133,13 @@ function coverage(filter = {}) {
 function readiness() {
   const all = estimate();
   const temas = DATA.temas.map(t => ({ ...t, d: estimate({ tema: t.id }), cov: coverage({ tema: t.id }) }));
-  const lastSim = S.sims.length ? S.sims[S.sims.length - 1].score : null;
+  // Media de los 2 últimos simulacros: uno solo se puede aprobar por suerte
+  const last2 = S.sims.slice(-2);
+  const lastSim = last2.length ? last2.reduce((a, x) => a + x.score, 0) / last2.length : null;
   const checks = [
     { ok: all >= GOAL_ALL, label: `Nota estimada de ${pct(GOAL_ALL)}% o más`, info: S.n ? `ahora: ${pct(all)}%` : 'aún sin datos' },
     { ok: temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Haber trabajado cada tema (${pct(GOAL_COVER)}% visto)`, info: temas.map(t => `${t.corto}: ${pct(t.cov)}%`).join(' · ') },
-    { ok: lastSim !== null && lastSim >= GOAL_SIM, label: `Aprobar un simulacro con ${pct(GOAL_SIM)}% o más`, info: lastSim === null ? 'sin hacer' : `último: ${pct(lastSim)}%` },
+    { ok: lastSim !== null && lastSim >= GOAL_SIM, label: `Simulacros con ${pct(GOAL_SIM)}% o más`, info: lastSim === null ? 'sin hacer' : S.sims.length > 1 ? `media de los 2 últimos: ${pct(lastSim)}%` : `último: ${pct(lastSim)}%` },
   ];
   return { all, temas, lastSim, checks, ready: checks.every(c => c.ok) };
 }
@@ -192,7 +201,8 @@ function pickWeakSection(ids) {
   const bySec = {};
   for (const id of ids) (bySec[CONCEPTS[id].sec] ||= []).push(id);
   const secs = Object.keys(bySec);
-  const w = secs.map(s => Math.pow(weakness(s), 2) + 0.05);
+  // Más peso a los apartados flojos y a los grandes (para no agotar primero los pequeños)
+  const w = secs.map(s => (Math.pow(weakness(s), 2) + 0.05) * Math.sqrt(bySec[s].length));
   let r = Math.random() * w.reduce((a, b) => a + b, 0);
   for (let i = 0; i < secs.length; i++) {
     r -= w[i];
@@ -234,8 +244,8 @@ function homeMessage(r) {
   const failed = failedIds().length;
   if (!S.diag) return `Te propongo empezar con un <b>diagnóstico</b> de ${DIAG_LEN} preguntas para ver qué sabes ya. ¡Sin presión!`;
   if (r.ready) return `¡Estás <b>lista</b>, ${NAME}! 🎉 Si quieres, sigue repasando un poquito para afianzar.`;
-  const simFailed = r.lastSim !== null && r.lastSim < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN;
-  if (simFailed) return `En el simulacro sacaste un <b>${pct(r.lastSim)}%</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo 💪`;
+  const simFailed = S.sims.length && S.sims.at(-1).score < GOAL_SIM && S.sims.at(-1).n >= S.n - SIM_LEN;
+  if (simFailed) return `En el simulacro sacaste un <b>${pct(S.sims.at(-1).score)}%</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo 💪`;
   const covered = r.checks[1].ok;
   if (r.all >= GOAL_ALL && covered && r.lastSim === null) return `¡Tu nota estimada es de un <b>${pct(r.all)}%</b>! Es el momento de hacer un <b>simulacro de examen</b>.`;
   if (r.all >= GOAL_ALL && !covered) return `Lo que has visto lo llevas genial (<b>${pct(r.all)}%</b>). Sigue estudiando para cubrir más temario.`;
@@ -275,7 +285,7 @@ function onboardingSteps() {
         <li><span class="n">2</span><span><b>Práctica inteligente:</b> te pregunto más lo que fallas, hasta que lo domines.</span></li>
         <li><span class="n">3</span><span><b>Simulacro:</b> un examen de prueba para comprobar que estás lista.</span></li></ul>` },
     { mood: 'happy', html: `<p>Después de cada respuesta te enseño <b>la frase exacta del libro</b> y su página.</p><p>Así también aprendes de los fallos 😉</p>` },
-    { mood: 'happy', html: `<p>Voy calculando tu <b>nota estimada</b>. Cuando llegue al <b>${pct(GOAL_ALL)}%</b>, hayas trabajado todos los temas y apruebes un simulacro, te diré:</p><p style="font-size:20px"><b>¡Estás lista!</b> 🎉</p><p>Y entonces podrás ir al examen tranquila.</p>` },
+    { mood: 'happy', html: `<p>Voy calculando tu <b>nota estimada</b>. Cuando llegue al <b>${pct(GOAL_ALL)}%</b>, hayas trabajado todos los temas y apruebes los simulacros, te diré:</p><p style="font-size:20px"><b>¡Estás lista!</b> 🎉</p><p>Y entonces podrás ir al examen tranquila.</p>` },
     S.diag
       ? { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¡Seguimos cuando quieras! 💪</p>`, last: true }
       : { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¿Empezamos con el diagnóstico?</p>`, last: true },
@@ -447,6 +457,7 @@ function showProgress() {
 function startSession(type, filter = {}) {
   let fixed = null;
   let pool = conceptIds(filter);
+  if (!pool.length) return showHome();
   let len = Math.min(SESSION_LEN, Math.max(5, pool.length * 2));
   if (type === 'diag') { fixed = buildDiag(); len = fixed.length; }
   if (type === 'sim') { fixed = buildSim(); len = fixed.length; }
@@ -796,7 +807,7 @@ function showReady() {
       <div class="kai-big">${kaiSVG()}</div>
       <div class="bubble">
         <p style="font-size:24px"><b>¡Estás lista, ${NAME}!</b> 🎉</p>
-        <p>Tu nota estimada es de un <b>${pct(r.all)}%</b> y has aprobado el simulacro con un <b>${pct(r.lastSim)}%</b>.</p>
+        <p>Tu nota estimada es de un <b>${pct(r.all)}%</b> y en los simulacros vas con un <b>${pct(r.lastSim)}%</b>.</p>
         <p>Ya puedes dejar de estudiar e ir al examen tranquila. ¡Vas a bordarlo!</p>
         <p>${CREATOR} y yo estamos muy orgullosos de ti 💙</p>
       </div>
