@@ -7,7 +7,7 @@ import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4
 const NAME = 'Cristina';
 const CREATOR = 'Kike';
 const STORE = 'kai-cristina-v1';
-const VERSION = '28/09 20:18'; // se muestra al pie para comprobar qué versión se está usando
+const VERSION = '28/09 20:20'; // se muestra al pie para comprobar qué versión se está usando
 const SESSION_LEN = 15;   // preguntas por ronda de práctica
 const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro

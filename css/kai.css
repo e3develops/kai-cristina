@@ -138,3 +138,20 @@
 @media (prefers-reduced-motion: reduce) {
   .kai * { animation: none !important; }
 }
+
+/* ---- Pantalla del pecho: cruz → electro → corazón → TAC → jeringa → cápsula (4 s cada una) ---- */
+.kai .k-scr { opacity: 0; animation: kScr 24s linear infinite both; animation-delay: calc(var(--i) * 4s); }
+@keyframes kScr { 0%, 1.5% { opacity: 0; } 2.5%, 16% { opacity: 1; } 16.67%, 100% { opacity: 0; } }
+.kai .k-scr-off { opacity: 0; pointer-events: none; animation: kOff 4s linear infinite; }
+@keyframes kOff { 0%, 4% { opacity: .9; } 6% { opacity: 0; } 8% { opacity: .5; } 10%, 97% { opacity: 0; } 100% { opacity: .9; } }
+.kai .k-ecg { stroke-dasharray: 120; animation: kEcg 1.6s linear infinite; }
+@keyframes kEcg { from { stroke-dashoffset: 120; } to { stroke-dashoffset: -120; } }
+.kai .k-heart { transform-origin: 100px 140px; animation: kBeat .9s ease-in-out infinite; }
+@keyframes kBeat { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.15); } 30% { transform: scale(1); } 45% { transform: scale(1.1); } }
+.kai .k-scan { transform-origin: 100px 138px; animation: kSpin 1.4s linear infinite; }
+@keyframes kSpin { to { transform: rotate(360deg); } }
+.kai .k-drop { animation: kDrop 1.2s ease-in infinite; }
+@keyframes kDrop { 0%, 30% { opacity: 0; transform: translate(0, 0); } 45% { opacity: 1; } 100% { opacity: 0; transform: translate(2px, 12px); } }
+@media (prefers-reduced-motion: reduce) {
+  .kai .k-scr-0 { opacity: 1; }
+}

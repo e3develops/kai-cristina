@@ -44,9 +44,46 @@ export function kaiSVG(extraClass = '') {
     <!-- cuerpo -->
     <rect x="44" y="100" width="112" height="86" rx="18" fill="url(#kBody)" stroke="#C98421" stroke-width="3"/>
     <rect x="58" y="113" width="84" height="56" rx="12" fill="#FFF6E0" stroke="#E3A845" stroke-width="2"/>
-    <g class="k-cross">
-      <rect x="92" y="122" width="16" height="38" rx="4" fill="#EF4444"/>
-      <rect x="81" y="133" width="38" height="16" rx="4" fill="#EF4444"/>
+    <!-- pantalla del pecho: va cambiando de imagen sanitaria cada 4 s -->
+    <g class="k-screen">
+      <g class="k-scr k-scr-0 k-cross" style="--i:0">
+        <rect x="92" y="122" width="16" height="38" rx="4" fill="#EF4444"/>
+        <rect x="81" y="133" width="38" height="16" rx="4" fill="#EF4444"/>
+      </g>
+      <g class="k-scr k-scr-1" style="--i:1">
+        <path d="M63 118 H137 M63 164 H137" stroke="#F3D9A4" stroke-width="1"/>
+        <path class="k-ecg" d="M63 141 H80 L85 133 L90 141 L94 141 L98 122 L103 158 L108 136 L112 141 H137" stroke="#10B981" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <g class="k-scr k-scr-2" style="--i:2">
+        <path class="k-heart" d="M100 158 C82 146 75 135 83 126 C89 119 97 122 100 129 C103 122 111 119 117 126 C125 135 118 146 100 158 Z" fill="#EF4444"/>
+        <path d="M88 130 q3 -4 7 -2" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".7"/>
+      </g>
+      <g class="k-scr k-scr-3" style="--i:3">
+        <circle cx="100" cy="138" r="18" fill="none" stroke="#94A3B8" stroke-width="9"/>
+        <circle class="k-scan" cx="100" cy="138" r="18" fill="none" stroke="#0FA38C" stroke-width="4" stroke-dasharray="18 95" stroke-linecap="round"/>
+        <circle cx="100" cy="138" r="9" fill="#E0F2FE"/>
+        <rect x="66" y="152" width="68" height="7" rx="3.5" fill="#64748B"/>
+        <circle cx="76" cy="148" r="4" fill="#FBBF24"/>
+      </g>
+      <g class="k-scr k-scr-4" style="--i:4">
+        <g transform="rotate(-30 100 141)">
+          <rect x="66" y="138" width="4" height="12" rx="1.5" fill="#64748B"/>
+          <rect x="70" y="142" width="12" height="4" fill="#94A3B8"/>
+          <rect x="82" y="135" width="34" height="18" rx="3" fill="#fff" stroke="#3B82F6" stroke-width="2.5"/>
+          <rect x="93" y="138" width="21" height="12" rx="1.5" fill="#93C5FD"/>
+          <path d="M86 135 v5 M90 135 v4 M94 135 v5 M98 135 v4 M102 135 v5" stroke="#3B82F6" stroke-width="1.2"/>
+          <path d="M116 144 H134" stroke="#64748B" stroke-width="2" stroke-linecap="round"/>
+          <circle class="k-drop" cx="137" cy="144" r="2.6" fill="#60A5FA"/>
+        </g>
+      </g>
+      <g class="k-scr k-scr-5" style="--i:5">
+        <g transform="rotate(-30 100 141)">
+          <rect x="77" y="131" width="46" height="20" rx="10" fill="#fff" stroke="#CBD5E1" stroke-width="2"/>
+          <path d="M100 131 H87 a10 10 0 0 0 0 20 H100 Z" fill="#EF4444"/>
+          <path d="M84 136 q4 -2 9 -1" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".7"/>
+        </g>
+      </g>
+      <rect class="k-scr-off" x="59" y="114" width="82" height="54" rx="11" fill="#1F2937"/>
       <rect x="70" y="116" width="60" height="50" fill="transparent"/>
     </g>
     <circle class="k-led" cx="62" cy="177" r="3.5" fill="#22C55E"/>
