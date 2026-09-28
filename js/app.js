@@ -11,7 +11,7 @@ const DIAG_LEN = 24;      // preguntas del diagnóstico
 const SIM_LEN = 40;       // preguntas del simulacro
 const GOAL_ALL = 0.82;    // nota estimada global para estar lista
 const GOAL_TEMA = 0.70;   // nota estimada mínima en cada tema
-const GOAL_COVER = 0.3;   // parte de cada tema que hay que haber trabajado
+const GOAL_COVER = 0.8;   // parte de cada tema que hay que haber respondido
 const GOAL_SIM = 0.80;    // nota mínima en el último simulacro
 const MASTERY_STREAK = 2; // aciertos seguidos para dominar un concepto
 

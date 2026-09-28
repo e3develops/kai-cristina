@@ -33,5 +33,5 @@ y abrir http://localhost:5173
 - **Concepto dominado**: acertado 2 veces seguidas. Un fallo lo vuelve a sacar a las ~3 preguntas.
 - **Contenido nuevo**: se prioriza el de los apartados con peor porcentaje de aciertos.
 - **Nota estimada**: media de la probabilidad de acierto de cada concepto (visto o estimado por su apartado).
-- **"¡Estás lista!"**: nota estimada ≥ 85 %, cada tema con ≥ 50 % visto y ≥ 75 % de nota, y último simulacro ≥ 80 %.
+- **"¡Estás lista!"**: previsión de nota ≥ 82 %, cada tema con ≥ 80 % de sus preguntas respondidas y ≥ 70 % de previsión, y media de los 2 últimos simulacros ≥ 80 %.
 - El progreso se guarda en el navegador del dispositivo (localStorage).
