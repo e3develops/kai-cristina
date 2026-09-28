@@ -484,6 +484,7 @@ function quitSession() {
 }
 // Botón/gesto "atrás" durante una ronda: preguntar antes de salir
 window.addEventListener('popstate', () => {
+  if (viewerEl) return closeBook(true);
   if (!sess || !app.querySelector('.qtop')) return;
   if (sess.i === 0 || confirm('¿Salir de esta ronda? Lo que ya has respondido queda guardado.')) quitSession();
   else { try { history.pushState({ kai: 'quiz' }, ''); } catch (e) { /* sin historial */ } }
@@ -599,10 +600,12 @@ function answer(k) {
     <div class="feedback ${it.ok ? 'ok' : 'ko'}">
       <div class="fb-head"><div class="mini-kai">${kaiSVG()}</div><span>${it.ok ? rand(OK_MSGS) : rand(KO_MSGS)}</span></div>
       <div class="quote">📖 ${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
+      <button class="book-btn" data-q="${esc(q.id)}">🔎 Llévame al libro</button>
     </div>
     <div class="sticky-bottom"><button class="btn" id="next">${sess.i + 1 >= sess.len ? 'Ver resultados' : 'Siguiente'}</button></div>`;
   setKaiMood(fb, it.ok ? 'happy' : 'sad');
   fb.querySelector('#next').onclick = () => { if (!sess) return; sess.i++; nextQuestion(); };
+  fb.querySelector('.book-btn').onclick = () => openBook(q.id);
   guardTaps(fb);
   // Desplaza lo justo para ver la corrección, sin sacar la pregunta de la pantalla
   setTimeout(() => {
@@ -611,6 +614,69 @@ function answer(k) {
     const need = top - window.innerHeight * 0.55;
     if (need > 0) window.scrollBy({ top: Math.min(need, Math.max(0, qTop - 8)), behavior: 'smooth' });
   }, 60);
+}
+
+// ---------- Visor "Llévame al libro": la página original con la frase subrayada ----------
+let HL = null; // resaltados: id -> { img, rects: [[x, y, w, h] en fracción] }
+async function loadHighlights() {
+  if (HL) return HL;
+  try { HL = await (await fetch('data/resaltados.json', { cache: 'no-cache' })).json(); } catch (e) { HL = {}; }
+  return HL;
+}
+let viewerEl = null;
+function closeBook(fromPop = false) {
+  if (!viewerEl) return;
+  viewerEl.remove();
+  viewerEl = null;
+  document.body.style.overflow = '';
+  if (!fromPop) { try { history.back(); } catch (e) { /* sin historial */ } }
+}
+async function openBook(qid) {
+  const q = Q[qid];
+  if (!q || viewerEl) return;
+  const hl = (await loadHighlights())[qid] || {};
+  const img = hl.img || `paginas/${q.tema}-${q.pagina}.jpg`;
+  const rects = hl.rects || [];
+  const pag = (img.match(/-(\d+)\.jpg$/) || [])[1] || q.pagina;
+  const t = DATA.temas.find(x => x.id === q.tema);
+
+  viewerEl = document.createElement('div');
+  viewerEl.className = 'viewer';
+  viewerEl.innerHTML = `
+    <div class="v-top">
+      <button class="icon-btn" data-a="close" aria-label="Cerrar">✕</button>
+      <div class="v-title"><b>${esc(t ? t.corto : '')} · pág. ${esc(pag)}</b><span>${rects.length ? 'Lo tienes subrayado en amarillo' : 'La frase está en esta página'}</span></div>
+      <div class="v-zoom"><button class="icon-btn" data-a="out" aria-label="Alejar">−</button><button class="icon-btn" data-a="in" aria-label="Acercar">+</button></div>
+    </div>
+    <div class="v-scroll"><div class="v-page">
+      <img src="${esc(img)}" alt="Página ${esc(pag)} del libro">
+      ${rects.map(([x, y, w, h]) => `<i class="v-hl" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"></i>`).join('')}
+    </div></div>
+    <div class="v-quote">📖 ${fmtQuote(q.fuente)}</div>`;
+  document.body.appendChild(viewerEl);
+  document.body.style.overflow = 'hidden';
+  guardTaps(viewerEl);
+  try { history.pushState({ kai: 'book' }, ''); } catch (e) { /* sin historial */ }
+
+  const scroller = viewerEl.querySelector('.v-scroll');
+  const page = viewerEl.querySelector('.v-page');
+  const im = page.querySelector('img');
+  let zoom = rects.length ? 2 : 1;
+  const focus = () => {
+    // Centra la vista en el primer subrayado
+    const r = rects[0];
+    if (!r) return;
+    const W = page.clientWidth, H = page.clientHeight;
+    scroller.scrollLeft = Math.max(0, (r[0] + r[2] / 2) * W - scroller.clientWidth / 2);
+    scroller.scrollTop = Math.max(0, (r[1] + r[3] / 2) * H - scroller.clientHeight / 2);
+  };
+  const apply = () => { page.style.width = `${zoom * 100}%`; requestAnimationFrame(focus); };
+  im.onload = apply;
+  if (im.complete) apply();
+  im.onerror = () => { scroller.innerHTML = '<p class="muted" style="padding:24px;text-align:center">No he podido cargar la página. Comprueba la conexión.</p>'; };
+  viewerEl.querySelector('[data-a=close]').onclick = () => closeBook();
+  viewerEl.querySelector('[data-a=in]').onclick = () => { zoom = Math.min(4, zoom + 0.5); apply(); };
+  viewerEl.querySelector('[data-a=out]').onclick = () => { zoom = Math.max(1, zoom - 0.5); apply(); };
 }
 
 // Cita del libro: si es un fragmento que empieza a mitad de frase, se marca con «…»
@@ -679,6 +745,7 @@ function showResults() {
         <div class="a ko">✗ Tu respuesta: ${esc(q.opciones[it.chosen])}</div>
         <div class="a ok">✓ Correcta: ${esc(q.opciones[q.correcta])}</div>
         <div class="quote">📖 ${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
+        <button class="book-btn" data-q="${esc(q.id)}">🔎 Llévame al libro</button>
       </div>`;
     }).join('')}` : '';
 
@@ -713,6 +780,7 @@ function showResults() {
   const filter = againType === sess.type ? sess.filter : {};
   sess = null;
   app.querySelector('#again').onclick = () => startSession(againType, filter);
+  app.querySelectorAll('.book-btn').forEach(b => b.onclick = () => openBook(b.dataset.q));
   app.querySelector('#home').onclick = () => (r.ready && !S.readyShown) ? showReady() : showHome();
   if (r.ready && !S.readyShown) readyTimer = setTimeout(showReady, 2200);
 }
@@ -776,6 +844,7 @@ async function init() {
 }
 
 document.addEventListener('keydown', e => {
+  if (viewerEl) { if (e.key === 'Escape') closeBook(); return; }
   if (!sess || !app.querySelector('.qtop') || e.metaKey || e.ctrlKey || e.altKey) return;
   const k = '1234'.indexOf(e.key) >= 0 ? '1234'.indexOf(e.key) : 'abcd'.indexOf(e.key.toLowerCase());
   if (k >= 0 && e.key.length === 1) { app.querySelectorAll('.opt')[k]?.click(); return; }
