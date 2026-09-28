@@ -1,0 +1,37 @@
+# KAI · Estudia con Cristina 🤖🩺
+
+App web (PWA) de tests inteligentes para preparar los exámenes de enfermería.
+Todas las preguntas salen literalmente de los apuntes; cada una guarda la cita y la página.
+
+## Estructura
+
+- `index.html`, `css/`, `js/`: la app (HTML + JS sin compilación).
+  - `js/app.js`: pantallas y motor de aprendizaje (repetición espaciada + nota estimada).
+  - `js/kai.js`: la mascota KAI en SVG.
+- `data/preguntas.json`: banco de preguntas que carga la app (se genera, no se edita a mano).
+- `fuentes/` (**no se sube a git**): fotos/PDF del libro, transcripciones y bancos por bloque.
+- `tools/build_preguntas.py`: une y valida `fuentes/preguntas/*.json` → `data/preguntas.json`.
+- `tools/make_icons.py`: genera los iconos.
+
+## Añadir contenido nuevo
+
+1. Guardar el material en `fuentes/` y generar un `fuentes/preguntas/<bloque>.json` con el formato:
+   `id, tema, seccion, concepto, pregunta, opciones[4], correcta (0-3), fuente (cita literal), pagina`.
+2. Si es un tema nuevo, añadirlo a `TEMAS` en `tools/build_preguntas.py`.
+3. `python tools/build_preguntas.py`
+
+## Probar en local
+
+```
+python -m http.server 5173
+```
+
+y abrir http://localhost:5173
+
+## Cómo decide KAI
+
+- **Concepto dominado**: acertado 2 veces seguidas. Un fallo lo vuelve a sacar a las ~3 preguntas.
+- **Contenido nuevo**: se prioriza el de los apartados con peor porcentaje de aciertos.
+- **Nota estimada**: media de la probabilidad de acierto de cada concepto (visto o estimado por su apartado).
+- **"¡Estás lista!"**: nota estimada ≥ 85 %, cada tema con ≥ 50 % visto y ≥ 75 % de nota, y último simulacro ≥ 80 %.
+- El progreso se guarda en el navegador del dispositivo (localStorage).
