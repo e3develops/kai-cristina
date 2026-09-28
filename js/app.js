@@ -138,6 +138,19 @@ function qStats(filter = {}) {
   return { total, seen, ok, ko, pSeen: total ? seen / total : 0, pOk: total ? ok / total : 0 };
 }
 const coverage = (filter = {}) => qStats(filter).pSeen;
+// Preguntas que faltan por responder para llegar a la cobertura mínima en cada tema, y tiempo aproximado
+// (≈1,4 respuestas por pregunta nueva contando los repasos de fallos; ≈15 s por respuesta)
+function remainingWork() {
+  let left = 0;
+  for (const t of DATA.temas) { const q = qStats({ tema: t.id }); left += Math.max(0, Math.ceil(q.total * GOAL_COVER) - q.seen); }
+  const minutes = Math.round(left * 1.4 * 15 / 60);
+  return { left, minutes };
+}
+function fmtTime(min) {
+  if (min < 60) return `${Math.max(5, Math.round(min / 5) * 5)} min`;
+  const h = Math.round(min / 30) / 2;
+  return `${String(h).replace('.', ',')} h`;
+}
 const MIN_FORECAST = 20; // respuestas mínimas para mostrar la previsión de nota
 const hasForecast = () => S.n >= MIN_FORECAST;
 
@@ -149,7 +162,7 @@ function readiness() {
   const lastSim = last2.length ? last2.reduce((a, x) => a + x.score, 0) / last2.length : null;
   const checks = [
     { ok: hasForecast() && all >= GOAL_ALL, label: `Previsión de nota de ${pct(GOAL_ALL)}% o más`, info: hasForecast() ? `ahora: ${pct(all)}%` : `se calcula a partir de ${MIN_FORECAST} respuestas (llevas ${S.n})` },
-    { ok: hasForecast() && temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Responder al menos el ${pct(GOAL_COVER)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') },
+    { ok: hasForecast() && temas.every(t => t.d >= GOAL_TEMA && t.cov >= GOAL_COVER), label: `Responder al menos el ${pct(GOAL_COVER)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') + (remainingWork().left ? ` · faltan ${remainingWork().left} (≈ ${fmtTime(remainingWork().minutes)})` : '') },
     { ok: lastSim !== null && lastSim >= GOAL_SIM, label: `Simulacros con ${pct(GOAL_SIM)}% o más`, info: lastSim === null ? 'sin hacer' : S.sims.length > 1 ? `media de los 2 últimos: ${pct(lastSim)}%` : `último: ${pct(lastSim)}%` },
   ];
   return { all, temas, lastSim, checks, ready: checks.every(c => c.ok) };
@@ -298,7 +311,16 @@ function onboardingSteps() {
         <li><span class="n">2</span><span><b>Práctica inteligente:</b> te pregunto más lo que fallas, hasta que lo domines.</span></li>
         <li><span class="n">3</span><span><b>Simulacro:</b> un examen de prueba para comprobar que estás lista.</span></li></ul>` },
     { mood: 'happy', html: `<p>Después de cada respuesta te enseño <b>la frase exacta del libro</b> y su página.</p><p>Así también aprendes de los fallos 😉</p>` },
-    { mood: 'happy', html: `<p>Voy calculando tu <b>nota estimada</b>. Cuando llegue al <b>${pct(GOAL_ALL)}%</b>, hayas trabajado todos los temas y apruebes los simulacros, te diré:</p><p style="font-size:20px"><b>¡Estás lista!</b> 🎉</p><p>Y entonces podrás ir al examen tranquila.</p>` },
+    { mood: 'think', html: `<p>Para que sepas cómo vas, en el inicio te enseño:</p><ul class="steps-list">
+        <li><span class="n">✅</span><span><b>% dominado:</b> preguntas que tienes bien ahora mismo. Empieza en 0% y es exacto.</span></li>
+        <li><span class="n">🔮</span><span><b>Previsión de nota:</b> lo que calculo que sacarías hoy. Aparece a partir de ${MIN_FORECAST} respuestas.</span></li>
+        <li><span class="n">📝</span><span><b>Simulacros:</b> tu nota en un examen de prueba. Es la pista más real.</span></li></ul>` },
+    { mood: 'talk', html: `<p>Te diré <b>¡Estás lista!</b> 🎉 cuando cumplas las 3 cosas:</p><ul class="steps-list">
+        <li><span class="n">1</span><span>Haber respondido al menos el <b>${pct(GOAL_COVER)}%</b> de cada tema (unas ${remainingWork().left + qStats().seen} preguntas).</span></li>
+        <li><span class="n">2</span><span>Una previsión de nota del <b>${pct(GOAL_ALL)}%</b> o más.</span></li>
+        <li><span class="n">3</span><span>Sacar de media un <b>${pct(GOAL_SIM)}%</b> o más en tus 2 últimos simulacros.</span></li></ul>
+        <p>Calculo que te llevará unas <b>${fmtTime(remainingWork().minutes)}</b> en total.</p>` },
+    { mood: 'happy', html: `<p>No hace falta hacerlo de golpe: <b>tu progreso se guarda solo</b> y puedes parar cuando quieras.</p><p>Y si no llegas a "lista", no te agobies: cada pregunta que repasas suma. Fíjate en tu <b>% dominado</b> y en tus <b>simulacros</b> 💙</p>` },
     S.diag
       ? { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¡Seguimos cuando quieras! 💪</p>`, last: true }
       : { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¿Empezamos con el diagnóstico?</p>`, last: true },
@@ -317,7 +339,7 @@ function showOnboarding(i = 0) {
         ${st.last
           ? (S.diag
               ? `<button class="btn" id="go-home">Volver al inicio</button><button class="btn ghost" id="prev">Atrás</button>`
-              : `<button class="btn" id="go-diag">¡Vamos! 🚀</button><button class="btn ghost" id="go-home">Primero echo un vistazo</button>`)
+              : `<button class="btn" id="go-diag">¡Vamos! 🚀</button><button class="btn ghost" id="go-home">Primero echo un vistazo</button><button class="btn ghost" id="prev">Atrás</button>`)
           : `<button class="btn" id="next">Siguiente</button>${i > 0 ? '<button class="btn ghost" id="prev">Atrás</button>' : '<button class="btn ghost" id="skip">Saltar presentación</button>'}`}
       </div>
     </div>`, st.mood);
