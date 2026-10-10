@@ -128,12 +128,6 @@
 .kai-toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 16px); z-index: 96; transform: translateX(-50%); background: var(--ink, #0F2A2E); color: #fff; font-weight: 900; font-size: 16px; padding: 10px 18px; border-radius: 99px; box-shadow: 0 8px 24px rgba(15, 42, 46, .25); animation: kToast 2.4s ease forwards; pointer-events: none; white-space: nowrap; }
 @keyframes kToast { 0% { opacity: 0; transform: translate(-50%, -20px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -10px); } }
 
-/* Mensaje secreto */
-.secret { text-align: center; align-items: center; }
-.secret .kai { width: 130px; margin: 0 auto; }
-.secret .s-hint { color: var(--ink-2, #4A6468); font-weight: 800; font-size: 15px; }
-.secret .s-letter { background: #FFF7F9; border: 2px dashed #FDA4AF; border-radius: 18px; padding: 16px 18px; font-size: 17px; line-height: 1.55; font-weight: 700; text-align: left; color: #3F1D2B; }
-.secret .s-sign { display: block; text-align: right; margin-top: 8px; font-weight: 900; color: #E11D48; }
 
 @media (prefers-reduced-motion: reduce) {
   .kai * { animation: none !important; }

@@ -1,5 +1,5 @@
 // Easter eggs y vida de KAI: toques, baile, mimos, siesta, noche, ojos que siguen el dedo,
-// rachas de aciertos y el mensaje secreto de Kike (mantener pulsado a KAI).
+// rachas de aciertos y mimos (mantener pulsado a KAI).
 import { kaiSVG } from './kai.js';
 
 const PHRASES = ['¡Uy! 😳', '¡Cosquillas!', '¡Estoy aquí contigo! 💙', '¿Otra rondita?', '¡Tú puedes!', 'Beep boop 🤖', '¡Me encanta estudiar contigo!', '¡Hola! 👋'];
@@ -73,25 +73,6 @@ function toast(text) {
   setTimeout(() => t.remove(), 2500);
 }
 
-// ---------- Mensaje secreto ----------
-function secret() {
-  if (document.querySelector('.secret')) return;
-  const bg = document.createElement('div');
-  bg.className = 'modal-bg';
-  bg.innerHTML = `
-    <div class="modal secret" role="dialog" aria-label="Mensaje secreto">
-      ${kaiSVG('love')}
-      <p class="s-hint">Uy… parece que has descubierto un <b>mensaje secreto</b>&nbsp;👀</p>
-      <div class="s-letter">Hola mi amor!! 💕, has pillado un truquito que he dejado en la app jeje. Espero que te esté ayudando mucho y seguro que sacas una súper nota. Te quiero.<span class="s-sign">Kike&nbsp;❤️</span></div>
-      <button class="btn" data-a="close">🥰 Cerrar</button>
-    </div>`;
-  document.body.appendChild(bg);
-  const close = () => bg.remove();
-  bg.addEventListener('click', e => { if (e.target === bg) close(); });
-  bg.querySelector('[data-a=close]').onclick = close;
-  setTimeout(() => { const k = bg.querySelector('svg.kai'); if (k) sparkle(k, ['💕', '❤️', '💖'], 10); }, 250);
-}
-
 // ---------- Toques, pulsación larga ----------
 let taps = 0, lastTap = 0, pressTimer = null, suppressClick = false;
 
@@ -99,13 +80,12 @@ document.addEventListener('pointerdown', e => {
   const svg = e.target.closest?.('svg.kai');
   if (!svg) return;
   clearTimeout(pressTimer);
-  // Mantener pulsado: mimos y el mensaje secreto de Kike
+  // Mantener pulsado: mimos
   pressTimer = setTimeout(() => {
     suppressClick = true;
     taps = 0;
     pulse(svg, 'love', 2600);
     sparkle(svg, ['💕', '💖', '❤️'], 7);
-    if (window.kaiSecreto) setTimeout(secret, 700); // solo en la cuenta de Cris (ver config.js)
   }, 600);
 }, true);
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => document.addEventListener(ev, () => clearTimeout(pressTimer), true));
@@ -197,5 +177,4 @@ window.kaiFun = {
     const k = mainKai();
     if (k) { pulse(k, 'flip', 950); sparkle(k, ['🔥', '⭐', '✨'], 6); }
   },
-  secret,
 };

@@ -1,7 +1,7 @@
 import { kaiSVG, setKaiMood } from './kai.js';
 import { app, esc, render, modal, guardTaps, onRender, aviso } from './ui.js';
 import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4 } from './installart.js';
-import { CREADOR, VERSION, MENSAJE_SECRETO_PARA } from './config.js';
+import { CREADOR, VERSION } from './config.js';
 import { api, SinConexion, SinSesion, sesionGuardada, guardarSesion, olvidarSesion } from './api.js';
 import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, DIAG_LEN, SIM_LEN, MIN_FORECAST } from './engine/motor.js';
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
@@ -989,20 +989,12 @@ async function arrancar() {
   }
   NAME = (sesion.user.nombre || '').split(' ')[0];
   guardarSesion(sesion);
-  activarMensajeSecreto(sesion.user.email);
   configurarBiblioteca({
     abrirExamen, nombre: () => NAME, menuCuenta,
     iniciales: () => (sesion.user.nombre || sesion.user.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase(),
     entrar: () => showLogin(),
   });
   try { await showInicio(); } catch (e) { if (e instanceof SinSesion) showLogin(); }
-}
-
-async function activarMensajeSecreto(email) {
-  try {
-    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(email || '').trim().toLowerCase()));
-    window.kaiSecreto = MENSAJE_SECRETO_PARA.includes([...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join(''));
-  } catch (e) { window.kaiSecreto = false; }
 }
 
 // Abre el estudio de un examen (la KAI de siempre): datos, progreso del móvil + de la cuenta, motor
