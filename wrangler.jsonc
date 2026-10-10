@@ -13,12 +13,15 @@
     "run_worker_first": ["/api/*"]
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "kai", "database_id": "PENDIENTE", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "kai", "database_id": "f5f91ed9-ffba-4a17-9775-4a4f4f8f6141", "migrations_dir": "migrations" }
   ],
   // Contenido de los exámenes (preguntas, apuntes, páginas del libro): privado, solo vía API
   "kv_namespaces": [
-    { "binding": "CONTENIDO", "id": "PENDIENTE" }
+    { "binding": "CONTENIDO", "id": "0c8cc39a9ccf43768e6c5f3ab33e8500" }
   ],
+  // Subdominio propio (la web de e3develops.com no se toca); sin la dirección *.workers.dev
+  "routes": [{ "pattern": "kai.e3develops.com", "custom_domain": true }],
+  "workers_dev": false,
   "vars": {
     // Únicas cuentas que se pueden crear (separadas por comas). El primer correo es el administrador.
     "CORREOS_PERMITIDOS": "e3develops@gmail.com",
