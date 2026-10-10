@@ -79,8 +79,10 @@ afinar con notas reales.
 npm run deploy
 ```
 
-Pasa los tests, compila, aplica las migraciones pendientes de la base de datos y publica en Cloudflare
-(https://kai.e3develops.com). La versión es la fecha y hora de la compilación; al abrirse, la app compara
+Pasa los tests, compila, aplica las migraciones pendientes de la base de datos y publica en Cloudflare:
+https://kai.e3develops.com y la dirección de reserva https://kai-e3develops.pages.dev (`reserva/`), que usa otro
+rango de IPs y sirve para cuando las operadoras bloquean las del dominio (bloqueos de LaLiga). Las dos usan la
+misma cuenta y los mismos datos. La versión es la fecha y hora de la compilación; al abrirse, la app compara
 la suya con `version.json` y, si hay una nueva, limpia la caché y se recarga sola.
 
 La dirección antigua (GitHub Pages) solo sirve la página "KAI se ha mudado" (`mudanza/`), que se queda

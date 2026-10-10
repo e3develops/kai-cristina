@@ -1,0 +1,10 @@
+// Dirección de reserva de KAI en Cloudflare Pages (*.pages.dev, otro rango de IPs).
+// Sirve la misma app (../dist) y pasa /api/* al Worker "kai" por dentro de Cloudflare (service binding),
+// así funciona aunque las operadoras bloqueen las IPs del dominio (bloqueos de LaLiga).
+// Publicar: cd reserva && node ../node_modules/wrangler/bin/wrangler.js pages deploy --branch main --force
+{
+  "name": "kai-e3develops",
+  "pages_build_output_dir": "../dist",
+  "compatibility_date": "2026-10-01",
+  "services": [{ "binding": "KAI", "service": "kai" }]
+}
