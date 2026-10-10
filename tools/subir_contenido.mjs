@@ -28,7 +28,7 @@ writeFileSync(bulk, JSON.stringify(entries));
 console.log(`${entries.length} ficheros de ${dir} → KV (${modo === '--local' ? 'local' : 'Cloudflare'})`);
 try {
   execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    ['wrangler', 'kv', 'bulk', 'put', bulk, '--binding', 'CONTENIDO', modo], { stdio: 'inherit', shell: process.platform === 'win32' });
+    ['wrangler', 'kv', 'bulk', 'put', bulk, '--binding', 'CONTENIDO', modo, ...(modo === '--local' ? ['--persist-to', '.wrangler/state'] : [])], { stdio: 'inherit', shell: process.platform === 'win32' });
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

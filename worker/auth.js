@@ -1,9 +1,7 @@
-// Cuentas con Better Auth sobre D1. Solo se pueden crear las cuentas de CORREOS_PERMITIDOS.
+// Cuentas con Better Auth sobre D1. Registro abierto: cualquiera puede crear su cuenta.
 import { betterAuth } from 'better-auth';
-import { APIError } from 'better-auth/api';
 
-export const permitidos = env => String(env.CORREOS_PERMITIDOS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-export const esAdmin = (env, user) => !!user && permitidos(env)[0] === String(user.email).toLowerCase();
+export const esAdmin = (env, user) => !!user && String(env.ADMIN || '').toLowerCase() === String(user.email).toLowerCase();
 
 // Se crea por petición: en Workers los bindings (env) solo existen dentro de cada petición
 export function crearAuth(env, request) {
@@ -21,15 +19,9 @@ export function crearAuth(env, request) {
     databaseHooks: {
       user: {
         create: {
-          before: async user => {
-            if (!permitidos(env).includes(String(user.email).toLowerCase())) {
-              throw new APIError('FORBIDDEN', { message: 'Este correo no tiene acceso a KAI.' });
-            }
-            return { data: user };
-          },
-          // Cada cuenta nueva recibe el examen inicial
+          // La cuenta del administrador recibe el examen de pruebas (las demás empiezan con la biblioteca vacía)
           after: async user => {
-            if (!env.EXAMEN_INICIAL) return;
+            if (!env.EXAMEN_INICIAL || !esAdmin(env, user)) return;
             const meta = await env.CONTENIDO.get(`${env.EXAMEN_INICIAL}/examen.json`, 'json');
             if (!meta) return;
             await env.DB.prepare(

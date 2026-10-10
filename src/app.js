@@ -1,6 +1,6 @@
 import { kaiSVG, setKaiMood } from './kai.js';
 import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4 } from './installart.js';
-import { CREADOR, VERSION, ALMACEN_ANTIGUO } from './config.js';
+import { CREADOR, VERSION } from './config.js';
 import { api, SinConexion, SinSesion, sesionGuardada, guardarSesion, olvidarSesion } from './api.js';
 import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, DIAG_LEN, SIM_LEN, MIN_FORECAST } from './engine/motor.js';
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
@@ -974,7 +974,6 @@ async function sync() {
     const m = mergeState(S, estado);
     for (const k of ['n', 'c', 'q', 'sims', 'diag', 'onboarded', 'readyShown', 'reinicio']) if (k in m) S[k] = m[k];
     saveState(EXAMEN.almacen, S);
-    if (EXAMEN.contenido === 'cap28-taller2') { try { localStorage.removeItem(ALMACEN_ANTIGUO); } catch (e) { /* nada */ } }
   } catch (e) {
     /* sin conexión o sesión caducada: se reintenta en el próximo cambio */
   } finally {
@@ -1024,10 +1023,6 @@ async function arrancar() {
     return pantallaError('Uy, no he podido cargar las preguntas.', 'Comprueba la conexión y vuelve a intentarlo.');
   }
   S = loadState(EXAMEN.almacen);
-  // Progreso de antes de las cuentas, guardado solo en este móvil: se junta con el de la cuenta
-  if (EXAMEN.contenido === 'cap28-taller2') {
-    try { const viejo = JSON.parse(localStorage.getItem(ALMACEN_ANTIGUO)); if (viejo?.v === 1) S = mergeState(S, viejo); } catch (e) { /* nada */ }
-  }
   try {
     const { estado } = await api.progreso(EXAMEN.id);
     if (estado) S = mergeState(S, estado);

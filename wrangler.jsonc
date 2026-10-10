@@ -23,9 +23,9 @@
   "routes": [{ "pattern": "kai.e3develops.com", "custom_domain": true }],
   "workers_dev": false,
   "vars": {
-    // Únicas cuentas que se pueden crear (separadas por comas). El primer correo es el administrador.
-    "CORREOS_PERMITIDOS": "e3develops@gmail.com",
-    // Examen que se asigna a cada cuenta nueva
+    // Cuenta de administrador (puede ver cualquier examen)
+    "ADMIN": "e3develops@gmail.com",
+    // Examen de pruebas que recibe la cuenta del administrador al crearse
     "EXAMEN_INICIAL": "cap28-taller2"
   }
   // Secretos (no van aquí): BETTER_AUTH_SECRET → `wrangler secret put BETTER_AUTH_SECRET`; en local, .dev.vars
