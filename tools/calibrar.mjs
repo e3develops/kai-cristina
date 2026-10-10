@@ -18,7 +18,7 @@ import { MEMORIA } from '../src/engine/memoria.js';
 // Para probar otros parámetros del motor: MEM='{"sAcierto":2}' node tools/calibrar.mjs
 if (process.env.MEM) Object.assign(MEMORIA, JSON.parse(process.env.MEM));
 
-const data = JSON.parse(readFileSync(new URL('../public/data/preguntas.json', import.meta.url), 'utf8'));
+const data = JSON.parse(readFileSync(new URL('../contenido/cap28-taller2/preguntas.json', import.meta.url), 'utf8'));
 const N_EST = Number(process.argv[2]) || 5;
 const FORMATO = { opciones: 4, penalizacion: Number(process.argv[3] ?? 0) };
 const f = formatoEfectivo(FORMATO);

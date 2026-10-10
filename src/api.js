@@ -1,0 +1,35 @@
+// Conexión con la API de KAI (mismo dominio: la sesión va en una cookie)
+export class SinConexion extends Error {}
+export class SinSesion extends Error {}
+
+async function req(path, opts = {}) {
+  let res;
+  try {
+    res = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  } catch (e) {
+    throw new SinConexion('Sin conexión');
+  }
+  const data = await res.json().catch(() => ({}));
+  // 401 en la API = sesión caducada; en /api/auth/ (entrar) = datos incorrectos, con su mensaje
+  if (res.status === 401 && !path.startsWith('/api/auth/')) throw new SinSesion('Sin sesión');
+  if (!res.ok) throw new Error(data.message || data.error || `Error ${res.status}`);
+  return data;
+}
+
+export const api = {
+  yo: () => req('/api/yo'),
+  examenes: () => req('/api/examenes'),
+  examen: id => req(`/api/examenes/${id}`),
+  json: url => req(url, { cache: 'no-cache' }),
+  progreso: id => req(`/api/progreso/${id}`),
+  subirProgreso: (id, estado) => req(`/api/progreso/${id}`, { method: 'PUT', body: JSON.stringify({ estado }) }),
+  entrar: (email, password) => req('/api/auth/sign-in/email', { method: 'POST', body: JSON.stringify({ email, password, rememberMe: true }) }),
+  crearCuenta: (name, email, password) => req('/api/auth/sign-up/email', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
+  salir: () => req('/api/auth/sign-out', { method: 'POST', body: '{}' }),
+};
+
+// Sesión recordada en el dispositivo: permite abrir la app sin conexión
+const SESION = 'kai-sesion';
+export const sesionGuardada = () => { try { return JSON.parse(localStorage.getItem(SESION)); } catch (e) { return null; } };
+export const guardarSesion = s => { try { localStorage.setItem(SESION, JSON.stringify(s)); } catch (e) { /* sin almacenamiento */ } };
+export const olvidarSesion = () => { try { localStorage.removeItem(SESION); } catch (e) { /* sin almacenamiento */ } };

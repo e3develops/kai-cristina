@@ -1,0 +1,29 @@
+// KAI en Cloudflare: un Worker que sirve la app (dist/) y la API (/api/*).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kai",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-01",
+  // Better Auth usa AsyncLocalStorage
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    // La API la atiende el Worker; el resto son ficheros estáticos de la app
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "kai", "database_id": "PENDIENTE", "migrations_dir": "migrations" }
+  ],
+  // Contenido de los exámenes (preguntas, apuntes, páginas del libro): privado, solo vía API
+  "kv_namespaces": [
+    { "binding": "CONTENIDO", "id": "PENDIENTE" }
+  ],
+  "vars": {
+    // Únicas cuentas que se pueden crear (separadas por comas). El primer correo es el administrador.
+    "CORREOS_PERMITIDOS": "e3develops@gmail.com",
+    // Examen que se asigna a cada cuenta nueva
+    "EXAMEN_INICIAL": "cap28-taller2"
+  }
+  // Secretos (no van aquí): BETTER_AUTH_SECRET → `wrangler secret put BETTER_AUTH_SECRET`; en local, .dev.vars
+}

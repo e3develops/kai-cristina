@@ -156,6 +156,14 @@ b { font-weight: 800; }
 
 .card { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); border: 1px solid var(--line); }
 
+/* Entrar / crear cuenta */
+.login { display: flex; flex-direction: column; gap: 14px; width: 100%; text-align: left; }
+.login label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800; color: var(--ink-2); }
+.login input { font: 700 16px/1.2 inherit; padding: 13px 14px; border-radius: 14px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); min-width: 0; }
+.login input:focus { outline: none; border-color: var(--primary); background: var(--card); }
+.login-err { margin: -4px 0 0; min-height: 1.2em; color: #BE123C; font-weight: 700; font-size: 14px; }
+.login-err:empty { display: none; }
+
 /* Anillo + título arriba; lista de requisitos a todo el ancho debajo */
 .ready-card { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; align-items: center; }
 .ready-card > div:not(.ring) { display: contents; }

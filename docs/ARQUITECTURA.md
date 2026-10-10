@@ -111,7 +111,7 @@ usuarios ─< asignaturas ─< examenes (fecha, formato, nivel, estado)
 
 | Fase | Contenido |
 |---|---|
-| 0 | Desacoplar el motor de KAI del contenido (examen como dato). Migrar a Vite. |
+| 0 ✅ | Desacoplar el motor de KAI del contenido (examen como dato). Migrar a Vite. Olvido con los días (FSRS), previsión para el día del examen en rango, los "?" de KAI. Calibración con estudiantes simulados (`tools/calibrar.mjs`). |
 | 1 | Cloudflare: login, BD, sincronización. Importar el examen actual y migrar el progreso de Cris. Mudanza a `kai.e3develops.com`. |
 | 2 | Biblioteca, asignaturas, exámenes (con formato), calendario, recomendación con (?). |
 | 3 | Fábrica semiautomática: subida, estados, avisos, publicación. Niveles y nota por formato. |

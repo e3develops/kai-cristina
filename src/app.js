@@ -1,16 +1,19 @@
 import { kaiSVG, setKaiMood } from './kai.js';
 import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4 } from './installart.js';
-import { PERFIL, VERSION, EXAMEN_URL } from './config.js';
+import { CREADOR, VERSION, ALMACEN_ANTIGUO } from './config.js';
+import { api, SinConexion, SinSesion, sesionGuardada, guardarSesion, olvidarSesion } from './api.js';
 import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, DIAG_LEN, SIM_LEN, MIN_FORECAST } from './engine/motor.js';
-import { freshState, loadState, saveState } from './engine/estado.js';
+import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
 import { fmtNota, describeFormato } from './engine/nota.js';
 import { why, explicacion, fmtRango } from './porque.js';
 
 // ------------------------------------------------------------------
 // Configuración
 // ------------------------------------------------------------------
-const NAME = PERFIL.nombre;
-const CREATOR = PERFIL.creador;
+let NAME = (sesionGuardada()?.user?.nombre || '').split(' ')[0]; // nombre de pila del usuario
+const CREATOR = CREADOR;
+const coma = () => (NAME ? `, ${NAME}` : ''); // "¡Genial, Cristina!" o "¡Genial!" si aún no sé su nombre
+const hola = () => (NAME ? `¡Hola, <b>${esc(NAME)}</b>!` : '¡Hola!');
 
 const app = document.getElementById('app');
 let EXAMEN;          // { id, nombre, formato, nivel, almacen, preguntas, documentos, resaltados }
@@ -26,7 +29,9 @@ let sess = null;     // sesión de test en curso
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = x => Math.round(x * 100);
 const rand = arr => arr[Math.floor(Math.random() * arr.length)];
-const save = () => saveState(EXAMEN.almacen, S);
+const save = () => { saveState(EXAMEN.almacen, S); programarSync(); };
+// Ruta privada (vía API) de una página del libro: "paginas/cap28-486.jpg" → "/api/examenes/…/paginas/cap28-486.jpg"
+const urlPagina = p => `${EXAMEN.paginas}/${p.replace(/^paginas\//, '')}`;
 
 // Atajos al motor (la lógica vive en engine/motor.js)
 const conceptIds = f => E.conceptIds(f);
@@ -43,12 +48,12 @@ const pickConcept = (pool, recent, preferNew) => E.pickConcept(pool, recent, pre
 const pickQuestion = (cid, avoid) => E.pickQuestion(cid, avoid, sess?.filter?.pag);
 const buildDiag = () => E.buildDiag();
 const buildSim = () => E.buildSim();
-const resetProgress = () => { S = freshState(); S.onboarded = true; E.reset(S); };
+const resetProgress = () => { S = freshState(); S.onboarded = true; S.reinicio = Date.now(); E.reset(S); sync(); };
 
 // ------------------------------------------------------------------
 // Frases de KAI
 // ------------------------------------------------------------------
-const OK_MSGS = ['¡Bien!', '¡Exacto!', '¡Eso es!', `¡Genial, ${NAME}!`, '¡Perfecto!', '¡Correcto!', '¡Muy bien!', '¡Toma ya! 💪'];
+const okMsgs = () => ['¡Bien!', '¡Exacto!', '¡Eso es!', `¡Genial${coma()}!`, '¡Perfecto!', '¡Correcto!', '¡Muy bien!', '¡Toma ya! 💪'];
 const KO_MSGS = ['¡Casi! Mira lo que dice el libro:', 'No pasa nada, te la vuelvo a preguntar pronto.', 'Ojo con esta, léela con calma:', 'Esta la repasamos otra vez en un ratito.'];
 
 function homeMessage(r) {
@@ -56,7 +61,7 @@ function homeMessage(r) {
   if (S.paused.diag) return `Tienes el <b>diagnóstico</b> a medias. Pulsa <b>Continuar</b> para seguir donde lo dejaste.`;
   if (S.paused.sim) return `Tienes un <b>simulacro</b> a medias. Pulsa <b>Continuar</b> para terminarlo cuando quieras.`;
   if (!S.diag) return `Lo primero es el <b>diagnóstico</b>: ${DIAG_LEN} preguntas para saber qué sabes ya y enfocar bien la práctica. ¡Sin presión!`;
-  if (r.ready) return `¡Estás <b>lista</b>, ${NAME}!&nbsp;🎉 Si quieres, sigue repasando un poquito para afianzar.`;
+  if (r.ready) return `¡Estás <b>lista</b>${coma()}!&nbsp;🎉 Si quieres, sigue repasando un poquito para afianzar.`;
   const lastSim = S.sims.at(-1);
   const simFailed = lastSim && E.simNota(lastSim) < E.nivel.notaSim && lastSim.n >= S.n - SIM_LEN && failedIds().length > 0;
   if (simFailed) return `En el simulacro sacaste un <b>${fmtNota(E.simNota(lastSim))}</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo&nbsp;💪`;
@@ -65,7 +70,7 @@ function homeMessage(r) {
   if (r.nota >= E.nivel.nota && !covered) return `Lo que has visto lo llevas genial (nota estimada: <b>${fmtRango(r.rango)}</b>). Sigue estudiando para cubrir más temario.`;
   if (failed >= 8) return `Tienes <b>${failed}</b> preguntas falladas pendientes. Si sigues estudiando te las iré repitiendo hasta que salgan solas.`;
   if (!hasForecast() || r.nota < 1) return `Vamos poco a poco. Pulsa <b>Seguir estudiando</b> y yo elijo las preguntas que más te convienen.`;
-  return rand([`¡Vas muy bien! Si el examen fuera ahora, calculo que sacarías <b>${fmtRango(r.rango)}</b>.`, `Cada pregunta cuenta. ¡Sigue así, ${NAME}!&nbsp;💪`]);
+  return rand([`¡Vas muy bien! Si el examen fuera ahora, calculo que sacarías <b>${fmtRango(r.rango)}</b>.`, `Cada pregunta cuenta. ¡Sigue así${coma()}!&nbsp;💪`]);
 }
 
 // ------------------------------------------------------------------
@@ -96,11 +101,11 @@ function browserAllowed() {
 }
 function installSteps() {
   if (inAppBrowser) return [
-    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>!&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
+    { mood: 'wave happy', html: `<p>${hola()}&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
     { mood: 'think', end: true, html: `<p>Estás dentro de otra app y desde aquí no puedo funcionar.</p><p>Toca <b>···</b> (o la brújula) y elige <b>“Abrir en Safari”</b>. Allí te enseño cómo ponerme en tu pantalla de inicio&nbsp;📲</p>` },
   ];
   return [
-    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>!&nbsp;👋 Soy <b>KAI</b>, tu robot de estudio. ${CREATOR} me ha creado para ayudarte con tus exámenes&nbsp;💙</p><p>Venga, vamos a instalarme en tu <b>pantalla de inicio</b> para que me tengas siempre a mano. Te enseño&nbsp;📲</p>` },
+    { mood: 'wave happy', html: `<p>${hola()}&nbsp;👋 Soy <b>KAI</b>, tu robot de estudio. ${CREATOR} me ha creado para ayudarte con tus exámenes&nbsp;💙</p><p>Venga, vamos a instalarme en tu <b>pantalla de inicio</b> para que me tengas siempre a mano. Te enseño&nbsp;📲</p>` },
     { art: art1, html: isIPad
         ? `<p><b>1.</b> Toca el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba), arriba a la derecha.</p>`
         : `<p><b>1.</b> Toca los tres puntos <b>···</b> abajo a la derecha y después <b>Compartir</b>.</p><p class="muted small">Si ya ves el botón Compartir (el cuadrado con la flecha) en la barra, tócalo directamente.</p>` },
@@ -138,7 +143,7 @@ function showInstallGate(i = 0) {
       t0 = now;
       if (taps >= 5 && confirm('¿Usar KAI aquí en el navegador? (solo para pruebas: el progreso no se comparte con la app instalada)')) {
         try { localStorage.setItem(ALLOW_BROWSER, '1'); } catch (e) { /* sin almacenamiento */ }
-        S.onboarded ? showHome() : showOnboarding(0);
+        arrancar();
       }
     });
   }
@@ -149,7 +154,7 @@ function onboardingSteps() {
   const total = DATA.preguntas.length;
   const temas = DATA.temas.map(t => `<li><span class="n">${t.emoji}</span><span>${esc(t.nombre)} <span class="muted small">(${DATA.preguntas.filter(p => p.tema === t.id).length} preguntas)</span></span></li>`).join('');
   return [
-    { mood: 'wave happy', html: `<p>¡Hola, <b>${NAME}</b>!&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
+    { mood: 'wave happy', html: `<p>${hola()}&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
     { mood: 'talk', html: `<p><b>${CREATOR}</b> me ha creado para ayudarte con tus estudios de enfermería.</p><p>Me ha pedido que te cuide mucho&nbsp;💙</p>` },
     { mood: 'think', html: `<p>Me he leído tus apuntes de arriba abajo&nbsp;📚</p><ul class="steps-list">${temas}</ul><p>Las respuestas correctas y las citas salen <b>literalmente de tu libro</b>. No me invento nada.</p>` },
     { mood: 'talk', html: `<p>Así vamos a trabajar:</p><ul class="steps-list">
@@ -228,7 +233,7 @@ function showHome() {
   render(`
     <div class="screen">
       <div class="topbar">
-        <div><div class="hello">Hola, ${NAME}&nbsp;👋</div><h1>¡A por el examen!</h1></div>
+        <div><div class="hello">Hola${coma()}&nbsp;👋</div><h1>¡A por el examen!</h1></div>
         <button class="icon-btn" id="menu" aria-label="Menú">⚙️</button>
       </div>
 
@@ -317,10 +322,13 @@ document.addEventListener('click', e => {
 function showMenu() {
   modal(`
     <h2>Opciones</h2>
+    <p class="muted small">Cuenta: <b>${esc(sesionGuardada()?.user?.email || '')}</b><br>Tu progreso se guarda en tu cuenta: puedes seguir desde cualquier dispositivo.</p>
     <button class="btn secondary" data-a="tuto">👋 Ver la presentación de KAI</button>
     <button class="btn secondary" data-a="reset">🗑️ Reiniciar mi progreso</button>
+    <button class="btn secondary" data-a="salir">🚪 Cerrar sesión</button>
     <button class="btn ghost" data-a="close">Cerrar</button>`, (el, close) => {
     el.querySelector('[data-a=tuto]').onclick = () => { close(); showOnboarding(0); };
+    el.querySelector('[data-a=salir]').onclick = () => { if (confirm('¿Cerrar sesión en este dispositivo? Tu progreso queda guardado en tu cuenta.')) cerrarSesion(); };
     el.querySelector('[data-a=close]').onclick = close;
     el.querySelector('[data-a=reset]').onclick = () => {
       if (confirm('¿Seguro? Se borrará todo tu progreso y KAI empezará de cero.')) {
@@ -379,7 +387,7 @@ async function apuntesHTML() {
       const q = qStats({ pag: `${d.tema}-${pg}` });
       const cls = q.total === 0 ? 'none' : q.total < 5 ? 'few' : 'ok';
       return `<button class="pg" data-tema="${esc(d.tema)}" data-pag="${pg}" aria-label="Página ${pg}, ${q.total} preguntas">
-        <img src="paginas/mini/${esc(d.tema)}-${pg}.jpg" alt="" loading="lazy">
+        <img src="${urlPagina(`mini/${d.tema}-${pg}.jpg`)}" alt="" loading="lazy">
         <span class="pg-n">pág. ${pg}</span>
         <span class="pg-q ${cls}">${q.total ? `${q.total}&nbsp;preg.` : 'sin preg.'}</span>
         <i class="pg-bar"><i style="width:${pct(q.pOk)}%"></i></i>
@@ -594,7 +602,7 @@ function answer(k) {
   const fb = app.querySelector('#fb');
   fb.innerHTML = `
     <div class="feedback ${it.ok ? 'ok' : 'ko'}">
-      <div class="fb-head"><div class="mini-kai">${kaiSVG()}</div><span>${it.ok ? rand(OK_MSGS) : rand(KO_MSGS)}</span></div>
+      <div class="fb-head"><div class="mini-kai">${kaiSVG()}</div><span>${it.ok ? rand(okMsgs()) : rand(KO_MSGS)}</span></div>
       <div class="quote">📖&nbsp;${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
       <button class="book-btn" data-q="${esc(q.id)}">🔎 Llévame al libro</button>
     </div>
@@ -644,7 +652,7 @@ async function openBook(qid) {
   const q = Q[qid];
   if (!q || viewerEl) return;
   const hl = (await loadHighlights())[qid] || {};
-  const img = hl.img || `paginas/${q.tema}-${q.pagina}.jpg`;
+  const img = urlPagina(hl.img || `${q.tema}-${q.pagina}.jpg`);
   const rects = hl.rects || [];
   const pag = (img.match(/-(\d+)\.jpg$/) || [])[1] || q.pagina;
   const t = DATA.temas.find(x => x.id === q.tema);
@@ -661,7 +669,7 @@ function openPage(tema, pagina) {
   const key = `${tema}-${pagina}`;
   const n = qStats({ pag: key }).total;
   openViewer({
-    img: `paginas/${key}.jpg`, rects: [],
+    img: urlPagina(`${key}.jpg`), rects: [],
     title: `${t ? t.corto : ''} · pág. ${pagina}`,
     sub: `${n} ${n === 1 ? 'pregunta' : 'preguntas'} · pellizca para hacer zoom`,
     footer: n ? `<button class="btn" data-a="practice">🎯 Practicar esta página (${n})</button>` : `<p class="muted small" style="margin:0">Esta página no tiene preguntas.</p>`,
@@ -878,7 +886,7 @@ function showReady() {
     <div class="screen onb ready-screen">
       <div class="kai-big">${kaiSVG()}</div>
       <div class="bubble">
-        <p style="font-size:24px"><b>¡Estás lista, ${NAME}!</b>&nbsp;🎉</p>
+        <p style="font-size:24px"><b>¡Estás lista${coma()}!</b>&nbsp;🎉</p>
         <p>Calculo que sacarás <b>${fmtRango(r.rango)}</b> y en los simulacros vas con un <b>${fmtNota(r.lastSim)}</b>.</p>
         <p>Ya puedes dejar de estudiar e ir al examen tranquila. ¡Vas a bordarlo!</p>
         <p>${CREATOR} y yo estamos muy orgullosos de ti&nbsp;💙</p>
@@ -931,7 +939,7 @@ async function applyUpdate(latest) {
     const reg = await navigator.serviceWorker?.getRegistration();
     await reg?.update();
     const keys = await caches.keys();
-    await Promise.all(keys.map(k => caches.delete(k)));
+    await Promise.all(keys.filter(k => k !== 'kai-datos').map(k => caches.delete(k))); // los datos de los exámenes se conservan
   } catch (e) { /* seguimos igualmente */ }
   location.reload();
   return true;
@@ -952,25 +960,138 @@ document.addEventListener('visibilitychange', async () => {
   document.body.appendChild(bar);
 });
 
+// ---------- Sincronización del progreso con la cuenta ----------
+// El progreso se guarda siempre en el móvil (funciona sin conexión) y se sube a la cuenta a los
+// pocos segundos de cada cambio. El servidor junta lo de todos los dispositivos y devuelve el resultado.
+let syncTimer = null, syncing = false;
+function programarSync(ms = 4000) { clearTimeout(syncTimer); syncTimer = setTimeout(sync, ms); }
+async function sync() {
+  if (!EXAMEN || !S || syncing) return;
+  syncing = true;
+  try {
+    const { estado } = await api.subirProgreso(EXAMEN.id, S);
+    // Se junta con lo actual (no se pisa: puede haber respuestas nuevas mientras viajaba la petición)
+    const m = mergeState(S, estado);
+    for (const k of ['n', 'c', 'q', 'sims', 'diag', 'onboarded', 'readyShown', 'reinicio']) if (k in m) S[k] = m[k];
+    saveState(EXAMEN.almacen, S);
+    if (EXAMEN.contenido === 'cap28-taller2') { try { localStorage.removeItem(ALMACEN_ANTIGUO); } catch (e) { /* nada */ } }
+  } catch (e) {
+    /* sin conexión o sesión caducada: se reintenta en el próximo cambio */
+  } finally {
+    syncing = false;
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sync(); });
+
+const pantallaCarga = (txt, sub = '') => render(`<div class="screen loading"><div><div class="kai-mid">${kaiSVG()}</div><p class="muted" style="font-weight:800">${txt}</p>${sub ? `<p class="muted small">${sub}</p>` : ''}</div></div>`, 'think');
+const pantallaError = (txt, sub) => render(`<div class="screen loading"><div><div class="kai-mid">${kaiSVG()}</div><p><b>${txt}</b></p><p class="muted">${sub}</p><button class="btn" onclick="location.reload()">Reintentar</button></div></div>`, 'sad');
+
 async function init() {
-  render(`<div class="screen loading"><div><div class="kai-mid">${kaiSVG()}</div><p class="muted" style="font-weight:800">KAI se está encendiendo…</p><p class="muted small">Comprobando si hay novedades</p></div></div>`, 'think');
+  pantallaCarga('KAI se está encendiendo…', 'Comprobando si hay novedades');
   const [latest] = await Promise.all([latestVersion(), new Promise(r => setTimeout(r, 600))]);
   if (latest && latest !== VERSION && await applyUpdate(latest)) return;
+  try { navigator.storage?.persist?.(); } catch (e) { /* opcional */ }
+  // En iPhone, primero instalarla: Safari y la app instalada no comparten la sesión
+  if (needsInstallHelp() && !browserAllowed()) return showInstallGate(0);
+  arrancar();
+}
+
+// Sesión → examen → preguntas → progreso (del móvil + de la cuenta) → inicio
+async function arrancar() {
+  let sesion = sesionGuardada();
   try {
-    EXAMEN = await (await fetch(EXAMEN_URL, { cache: 'no-cache' })).json();
-    DATA = await (await fetch(EXAMEN.preguntas, { cache: 'no-cache' })).json();
+    const user = await api.yo();
+    sesion = { ...sesion, user };
   } catch (e) {
-    render(`<div class="screen loading"><div><div class="kai-mid">${kaiSVG()}</div><p><b>Uy, no he podido cargar las preguntas.</b></p><p class="muted">Comprueba la conexión y recarga la página.</p></div></div>`, 'sad');
-    return;
+    if (e instanceof SinSesion) return showLogin();
+    if (!sesion?.user) return pantallaError('No tengo conexión', 'La primera vez necesito internet para que entres en tu cuenta.');
+    // Sin conexión pero ya había entrado antes: seguimos con lo guardado
+  }
+  NAME = (sesion.user.nombre || '').split(' ')[0];
+  try {
+    const lista = await api.examenes();
+    if (!lista.length) return pantallaError('Aún no tienes exámenes', 'Muy pronto podrás crearlos desde aquí.');
+    sesion.examen = await api.examen((lista.find(x => x.id === sesion.examen?.id) || lista[0]).id);
+  } catch (e) {
+    if (e instanceof SinSesion) return showLogin();
+    if (!sesion.examen) return pantallaError('No he podido cargar tu examen', 'Comprueba la conexión y vuelve a intentarlo.');
+  }
+  guardarSesion(sesion);
+  EXAMEN = sesion.examen;
+  try {
+    DATA = await api.json(EXAMEN.preguntas);
+  } catch (e) {
+    return pantallaError('Uy, no he podido cargar las preguntas.', 'Comprueba la conexión y vuelve a intentarlo.');
   }
   S = loadState(EXAMEN.almacen);
+  // Progreso de antes de las cuentas, guardado solo en este móvil: se junta con el de la cuenta
+  if (EXAMEN.contenido === 'cap28-taller2') {
+    try { const viejo = JSON.parse(localStorage.getItem(ALMACEN_ANTIGUO)); if (viejo?.v === 1) S = mergeState(S, viejo); } catch (e) { /* nada */ }
+  }
+  try {
+    const { estado } = await api.progreso(EXAMEN.id);
+    if (estado) S = mergeState(S, estado);
+  } catch (e) { /* sin conexión: con lo del móvil */ }
   E = createEngine({ examen: EXAMEN, data: DATA, state: S, save });
   Q = E.Q;
   pauseCurrent();
   save();
-  try { navigator.storage?.persist?.(); } catch (e) { /* opcional */ }
-  if (needsInstallHelp() && !browserAllowed()) return showInstallGate(0);
+  sync();
   if (S.onboarded) showHome(); else showOnboarding(0);
+}
+
+// ---------- Entrar / crear cuenta ----------
+const ERRORES = {
+  'Invalid email or password': 'Correo o contraseña incorrectos.',
+  'User already exists': 'Ya hay una cuenta con ese correo. Prueba a entrar.',
+  'User already exists. Use another email.': 'Ya hay una cuenta con ese correo. Prueba a entrar.',
+  'Password too short': 'La contraseña tiene que tener al menos 8 caracteres.',
+  'Invalid email': 'Ese correo no parece válido.',
+};
+function showLogin(modo = 'entrar') {
+  const crear = modo === 'crear';
+  render(`
+    <div class="screen onb">
+      <div class="kai-big">${kaiSVG()}</div>
+      <div class="bubble"><p>${crear ? '¡Encantado! Crea tu cuenta y así tu progreso <b>se guarda aunque cambies de móvil</b>&nbsp;💙' : `${hola()}&nbsp;👋 Soy <b>KAI</b>. Entra con tu cuenta para seguir estudiando.`}</p></div>
+      <form class="card login" id="login" novalidate>
+        ${crear ? '<label>Tu nombre<input name="name" autocomplete="given-name" required></label>' : ''}
+        <label>Correo<input name="email" type="email" autocomplete="email" inputmode="email" required></label>
+        <label>Contraseña<input name="password" type="password" minlength="8" autocomplete="${crear ? 'new-password' : 'current-password'}" required></label>
+        <p class="login-err" role="alert"></p>
+        <button class="btn" type="submit">${crear ? 'Crear cuenta' : 'Entrar'}</button>
+      </form>
+      <button class="btn ghost" id="toggle">${crear ? 'Ya tengo cuenta' : '¿Primera vez? Crea tu cuenta'}</button>
+    </div>`, 'wave happy');
+  app.querySelector('#toggle').onclick = () => showLogin(crear ? 'entrar' : 'crear');
+  const form = app.querySelector('#login');
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(form));
+    const err = form.querySelector('.login-err');
+    const btn = form.querySelector('button');
+    if (crear && !f.name?.trim()) return (err.textContent = 'Dime cómo te llamas 🙂');
+    if (!f.email || !f.password) return (err.textContent = 'Escribe tu correo y tu contraseña.');
+    btn.disabled = true;
+    err.textContent = '';
+    try {
+      if (crear) await api.crearCuenta(f.name.trim(), f.email.trim(), f.password);
+      else await api.entrar(f.email.trim(), f.password);
+      pantallaCarga('Preparando tus cosas…');
+      arrancar();
+    } catch (e2) {
+      err.textContent = e2 instanceof SinConexion ? 'No tengo conexión. Inténtalo en un momento.' : (ERRORES[e2.message] || e2.message);
+      btn.disabled = false;
+    }
+  };
+}
+
+async function cerrarSesion() {
+  await sync();
+  try { await api.salir(); } catch (e) { /* aunque falle, se olvida aquí */ }
+  olvidarSesion();
+  try { (await caches.keys()).forEach(k => caches.delete(k)); } catch (e) { /* nada */ }
+  location.reload();
 }
 
 document.addEventListener('keydown', e => {

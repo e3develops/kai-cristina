@@ -4,7 +4,7 @@ import pypdf
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "public", "paginas")
+OUT = os.path.join(ROOT, "contenido", "cap28-taller2", "paginas")
 os.makedirs(OUT, exist_ok=True)
 F = os.path.join(ROOT, "fuentes")
 

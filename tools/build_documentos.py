@@ -3,7 +3,7 @@ import json, os, re
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PAG = os.path.join(ROOT, "public", "paginas")
+PAG = os.path.join(ROOT, "contenido", "cap28-taller2", "paginas")
 MINI = os.path.join(PAG, "mini")
 os.makedirs(MINI, exist_ok=True)
 
@@ -32,7 +32,7 @@ for tema, pags in paginas.items():
     faltan = [p for p in range(pags[0], pags[-1] + 1) if p not in pags]
     out.append({"tema": tema, **DOCS.get(tema, {"titulo": tema, "origen": ""}),
                 "paginas": pags, "faltan": faltan})
-with open(os.path.join(ROOT, "public", "data", "documentos.json"), "w", encoding="utf-8") as fh:
+with open(os.path.join(ROOT, "contenido", "cap28-taller2", "documentos.json"), "w", encoding="utf-8") as fh:
     json.dump(out, fh, ensure_ascii=False, indent=1)
 for d in out:
     print(d["tema"], len(d["paginas"]), "páginas", "faltan:", d["faltan"])

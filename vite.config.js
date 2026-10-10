@@ -11,9 +11,9 @@ function buildVersion() {
 }
 
 // Ficheros de public/ que se precargan para que la app funcione sin conexión
+// (el contenido de los exámenes es privado: llega por la API y el service worker lo guarda al usarlo)
 const PUBLIC_PRECACHE = [
-  'data/examen.json', 'data/preguntas.json', 'data/documentos.json', 'manifest.webmanifest',
-  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
+  'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 
 // Genera version.json y el service worker con la lista real de ficheros compilados (llevan hash en el nombre)

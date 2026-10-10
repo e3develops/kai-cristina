@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createEngine, SIM_LEN } from '../src/engine/motor.js';
 import { formatoEfectivo, notaDeAciertos, notaDeProbabilidades, fmtNota, describeFormato } from '../src/engine/nota.js';
-import { freshState } from '../src/engine/estado.js';
+import { freshState, mergeState } from '../src/engine/estado.js';
 import { retencion, nuevaEstabilidad, MEMORIA } from '../src/engine/memoria.js';
 
-const data = JSON.parse(readFileSync(new URL('../public/data/preguntas.json', import.meta.url), 'utf8'));
+const data = JSON.parse(readFileSync(new URL('../contenido/cap28-taller2/preguntas.json', import.meta.url), 'utf8'));
 const examen = { formato: { opciones: 4, penalizacion: null }, nivel: 'medio' };
 
 test('formato "no lo sé": 4 opciones y cada fallo resta 1/3', () => {
@@ -101,6 +101,29 @@ test('progreso antiguo sin fechas: se le asigna fecha y estabilidad', () => {
   createEngine({ examen, data, state, save() {} });
   assert.equal(state.c.x.t, 1000);
   assert.equal(state.c.x.stab, 6);
+});
+
+test('sincronizar: de cada concepto gana lo más reciente y los simulacros se suman', () => {
+  const movil = { ...freshState(), n: 10, u: 200, c: { a: { t: 100, seen: 1 }, b: { t: 300, seen: 2 } }, q: { p1: { seen: 1, t: 100 } }, sims: [{ date: 1, score: 0.5 }] };
+  const pc = { ...freshState(), n: 7, u: 100, c: { a: { t: 200, seen: 3 } }, q: { p1: { seen: 3, t: 200 } }, sims: [{ date: 2, score: 0.9 }, { date: 1, score: 0.5 }] };
+  const m = mergeState(movil, pc);
+  assert.equal(m.c.a.seen, 3);
+  assert.equal(m.c.b.seen, 2);
+  assert.equal(m.q.p1.seen, 3);
+  assert.equal(m.sims.length, 2);
+  assert.equal(m.n, 10);
+  assert.deepEqual(mergeState(pc, movil).c, m.c); // da igual el orden
+});
+
+test('reiniciar el progreso en un dispositivo no se deshace al sincronizar con otro', () => {
+  const viejo = { ...freshState(), u: 100, diag: { date: 50, score: 0.5 }, c: { a: { t: 100, seen: 4 } }, q: { p1: { seen: 4, t: 100 } }, sims: [{ date: 90, score: 0.8 }] };
+  const reiniciado = { ...freshState(), u: 500, reinicio: 400, onboarded: true, c: { b: { t: 450, seen: 1 } } };
+  const m = mergeState(viejo, reiniciado);
+  assert.deepEqual(Object.keys(m.c), ['b']);
+  assert.deepEqual(m.q, {});
+  assert.equal(m.sims.length, 0);
+  assert.equal(m.diag, null);
+  assert.equal(m.reinicio, 400);
 });
 
 test('simulacros antiguos (solo con % de aciertos) siguen contando', () => {

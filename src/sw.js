@@ -1,7 +1,8 @@
 // Precarga todo para que funcione sin conexión. Luego: red primero (con límite de tiempo)
 // para recibir siempre las preguntas nuevas, y caché como respaldo.
 // Plantilla: al compilar, vite.config.js rellena el nombre de la caché y la lista de ficheros.
-const CACHE = '__CACHE__';
+const CACHE = '__CACHE__';   // la app de esta versión: se renueva con cada versión
+const DATOS = 'kai-datos';   // contenido de los exámenes (API): se conserva entre versiones
 const CORE = ['__PRECACHE__'];
 
 self.addEventListener('install', e => {
@@ -10,7 +11,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== DATOS).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -24,13 +25,17 @@ function withTimeout(promise, ms) {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (url.pathname.startsWith('/api/auth/')) return; // la sesión nunca se guarda
+  const destino = url.pathname.startsWith('/api/') ? DATOS : CACHE;
   e.respondWith(
     // no-cache: pregunta siempre al servidor si hay versión nueva (GitHub Pages permite cachear 10 min)
-    withTimeout(fetch(e.request, new URL(e.request.url).origin === self.location.origin ? { cache: 'no-cache' } : {}), 4000)
+    // (los datos pesan más: más margen antes de tirar de la copia guardada)
+    withTimeout(fetch(e.request, url.origin === self.location.origin ? { cache: 'no-cache' } : {}), destino === DATOS ? 15000 : 4000)
       .then(res => {
         if (res.ok) {
           const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+          caches.open(destino).then(c => c.put(e.request, copy)).catch(() => {});
         }
         return res;
       })

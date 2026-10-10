@@ -232,6 +232,7 @@ export function createEngine({ examen, data, state, save, now = () => Date.now()
       c.due = S.n + 4; // vuelve enseguida
     }
     const s = S.q[qid] || (S.q[qid] = { seen: 0, ok: 0 });
+    s.t = t;
     s.seen++;
     if (ok) s.ok++;
     s.lastOk = ok;
