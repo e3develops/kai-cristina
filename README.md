@@ -60,7 +60,17 @@ npm run preview   # sirve dist/ (con service worker)
 - **Prioridad en la práctica**: fallos recientes (vuelven a las ~4 preguntas) → fallos recuperados por confirmar (~6) → preguntas nuevas de los apartados más flojos y grandes. Tras un repaso siempre va una nueva.
 - **"Bien" (progreso)**: la última vez que salió la pregunta, se acertó. Un fallo recuperado necesita 2 aciertos seguidos para darse por confirmado.
 - **Nota estimada**: probabilidad de acierto de cada concepto (lo no visto se estima por lo acertado a la primera en su apartado), convertida a nota sobre 10 con el formato del examen. Se muestra a partir de 20 respuestas.
+- **Olvido** (`src/engine/memoria.js`): cada concepto tiene una estabilidad en días; lo aprendido se va olvidando (curva de FSRS, el algoritmo de Anki) y repasar espaciado lo asienta más. Los conceptos que se están olvidando vuelven a la práctica.
+- **Previsión para el día del examen**: si el examen tiene fecha, la nota y el "¿estás lista?" se calculan para ese día, contando lo que se olvidará hasta entonces.
 - **"¡Estás lista!"**: lo que pida el nivel elegido (tabla de arriba).
+
+### Calibración
+
+`node tools/calibrar.mjs [estudiantes] [penalización]` simula estudiantes (que aprenden y olvidan con un modelo
+distinto al del motor) con varios planes de estudio y compara la nota que estima KAI con la que sacarían.
+Resultado actual: quien llega a "lista" en Medio saca de verdad 7,0-8,6 (y ~9 en Pro). Con quien aún no está
+lista, KAI tiende a ser algo optimista en planes largos con parones (hasta +1,5): es lo primero que hay que
+afinar con notas reales.
 - El progreso se guarda en el navegador del dispositivo (localStorage).
 
 ## Publicar una versión nueva

@@ -31,9 +31,8 @@ export function describeFormato(f) {
 }
 
 // Niveles: qué importancia mínima entra (★★★ = 3, ★★ = 2, ★ = 1) y qué hace falta para superarlo.
-// Hipótesis iniciales: se recalibrarán con las notas reales de los exámenes.
-// Pendiente: el motor da como mucho un 90 % de acierto a un concepto dominado, y con −1/3 eso es un 8,7:
-// antes de ofrecer Pro hay que subir ese techo (p. ej. con rachas largas) o el 9,0 sería inalcanzable.
+// Comprobadas con estudiantes simulados (tools/calibrar.mjs): quien llega a "lista" en Medio saca de
+// verdad 7-8,6, y en Pro ~9. Se recalibrarán con las notas reales de los exámenes.
 export const NIVELES = {
   facil: { id: 'facil', nombre: 'Fácil', promete: '5-6', importanciaMin: 3, nota: 6.0, notaTema: 5.0, cobertura: 1.0, sims: 1, notaSim: 6.0 },
   medio: { id: 'medio', nombre: 'Medio', promete: '7-8', importanciaMin: 2, nota: 7.5, notaTema: 6.0, cobertura: 0.8, sims: 2, notaSim: 7.5 },

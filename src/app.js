@@ -239,7 +239,7 @@ function showHome() {
           <div class="ring" style="--p:${pct(all.pOk)}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${pct(all.pOk)}%</b><span>dominado</span></div></div>
           <div>
             <h3>${r.ready ? '¡Lista para el examen!&nbsp;🎉' : 'Preparación para el examen'}</h3>
-            <p class="muted small" style="font-weight:700;margin-top:2px">${all.ok} de ${all.total} preguntas bien · ${all.seen}&nbsp;respondidas${hasForecast() ? ` · nota estimada:&nbsp;<b>${fmtNota(r.nota)}</b>` : ''}</p>
+            <p class="muted small" style="font-weight:700;margin-top:2px">${all.ok} de ${all.total} preguntas bien · ${all.seen}&nbsp;respondidas${hasForecast() ? ` · nota estimada${r.futuro ? ' para el examen' : ''}:&nbsp;<b>${fmtNota(r.nota)}</b>` : ''}</p>
             <ul class="checks">${checks}</ul>
             <p class="muted small ready-note">Nivel ${E.nivel.nombre} (para un ${E.nivel.promete}) · notas sobre 10, ${describeFormato(E.formato)}</p>
           </div>

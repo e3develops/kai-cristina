@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createEngine, SIM_LEN } from '../src/engine/motor.js';
 import { formatoEfectivo, notaDeAciertos, notaDeProbabilidades, fmtNota, describeFormato } from '../src/engine/nota.js';
 import { freshState } from '../src/engine/estado.js';
+import { retencion, nuevaEstabilidad, MEMORIA } from '../src/engine/memoria.js';
 
 const data = JSON.parse(readFileSync(new URL('../public/data/preguntas.json', import.meta.url), 'utf8'));
 const examen = { formato: { opciones: 4, penalizacion: null }, nivel: 'medio' };
@@ -71,6 +72,35 @@ test('quien estudia todo el temario llega a "lista" en Medio', () => {
 test('quien apenas estudia no llega a "lista"', () => {
   const r = simulate(0.5, 150);
   assert.equal(r.ready, false);
+});
+
+test('olvido: el recuerdo baja con los días y repasar espaciado asienta más', () => {
+  assert.ok(retencion(0, 2) === 1);
+  assert.ok(retencion(10, 2) < retencion(1, 2));
+  const masivo = nuevaEstabilidad(2, true, 0.01);  // repasada a los pocos minutos
+  const espaciado = nuevaEstabilidad(2, true, 4);  // repasada a los 4 días
+  assert.ok(espaciado > masivo && masivo > 2);
+  assert.equal(nuevaEstabilidad(10, false, 3), MEMORIA.sFallo);
+});
+
+test('la previsión para un examen dentro de 10 días es menor que la de hoy', () => {
+  const t0 = new Date('2026-03-02T18:00:00').getTime();
+  let clock = t0;
+  const fecha = '2026-03-12';
+  const E = createEngine({ examen: { ...examen, fecha }, data, state: freshState(), save() {}, now: () => clock });
+  for (const cid of E.conceptIds().slice(0, 300)) { E.record(E.pickQuestion(cid), true); clock += 15000; }
+  const r = E.readiness();
+  assert.equal(r.futuro, true);
+  assert.ok(r.nota < r.notaHoy, `${r.nota} < ${r.notaHoy}`);
+});
+
+test('progreso antiguo sin fechas: se le asigna fecha y estabilidad', () => {
+  const state = freshState();
+  state.diag = { date: 1000, score: 0.5 };
+  state.c = { x: { seen: 2, ok: 2, ko: 0, streak: 2, due: 0, last: 3, lastOk: true, first: true } };
+  createEngine({ examen, data, state, save() {} });
+  assert.equal(state.c.x.t, 1000);
+  assert.equal(state.c.x.stab, 6);
 });
 
 test('simulacros antiguos (solo con % de aciertos) siguen contando', () => {

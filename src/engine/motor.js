@@ -1,6 +1,7 @@
 // Motor de estudio de UN examen: modelo de aprendizaje, elección de preguntas y "¿estás lista?".
 // No sabe nada de pantallas ni de qué examen es: recibe el examen (formato, nivel), sus preguntas y el progreso.
 import { formatoEfectivo, nivel as nivelDe, notaDeProbabilidades, notaDeAciertos, fmtNota } from './nota.js';
+import { DAY, retencion, nuevaEstabilidad } from './memoria.js';
 
 export const SESSION_LEN = 15;    // preguntas por ronda de práctica
 export const DIAG_LEN = 24;       // preguntas del diagnóstico
@@ -34,10 +35,16 @@ export function fmtTime(min) {
  * @param data    { temas: [...], preguntas: [...] }
  * @param state   progreso guardado (ver estado.js)
  * @param save    función que guarda el progreso
+ * @param now     reloj (ms); se cambia en las simulaciones
  */
-export function createEngine({ examen, data, state, save }) {
+export function createEngine({ examen, data, state, save, now = () => Date.now() }) {
   let S = state;
   const formato = formatoEfectivo(examen.formato);
+  const azar = 1 / formato.opciones;
+  // Día del examen (a las 9:00). Sin fecha, o si ya pasó, las previsiones son para "hoy".
+  const fechaExamen = examen.fecha ? new Date(`${examen.fecha}T09:00:00`).getTime() : null;
+  const momentoExamen = () => (fechaExamen && fechaExamen > now() ? fechaExamen : now());
+  migrate(S);
   const N = nivelDe(examen.nivel);
   const Q = {};        // id -> pregunta
   const CONCEPTS = {}; // id -> { id, tema, seccion, sec, qs: [ids], pags: Set }
@@ -51,6 +58,18 @@ export function createEngine({ examen, data, state, save }) {
   const enNivel = p => (p.importancia ?? 3) >= N.importanciaMin;
 
   const stat = id => S.c[id];
+
+  // Progreso guardado antes de que existiera el olvido: sin fecha ni estabilidad por concepto.
+  // Se toma como fecha la última conocida (diagnóstico o simulacros) y una estabilidad según cómo iba.
+  function migrate(st) {
+    const dates = [st.diag?.date, ...st.sims.map(x => x.date)].filter(Boolean);
+    const fallback = dates.length ? Math.max(...dates) : now();
+    for (const id in st.c) {
+      const c = st.c[id];
+      if (c.t == null) c.t = fallback;
+      if (c.stab == null) c.stab = !c.lastOk ? 0.5 : c.streak >= MASTERY_STREAK ? 6 : 3;
+    }
+  }
 
   function conceptIds(filter = {}) {
     return Object.values(CONCEPTS)
@@ -95,22 +114,34 @@ export function createEngine({ examen, data, state, save }) {
   // Sabida: acertada a la primera y nunca fallada, o 2+ aciertos seguidos tras fallarla
   const mastered = id => { const s = S.c[id]; return !!s && (s.streak >= MASTERY_STREAK || (s.ko === 0 && s.ok > 0)); };
 
-  // Probabilidad estimada de acertar un concepto en el examen
-  function conceptP(id) {
+  // Lo mejor que puede ir un concepto justo después de repasarlo, según cómo lo lleva
+  function techo(id) {
     const s = stat(id);
-    if (!s) return priorAcc(CONCEPTS[id].sec); // no visto: se estima por lo que sabe de su apartado
     if (!s.lastOk) return 0.5;                  // último intento fallado (ya vio la corrección)
+    if (s.streak >= 4) return 0.97;             // recuperado bien muchas veces: muy asentado
+    if (s.streak >= 3) return 0.95;
     if (s.streak >= MASTERY_STREAK) return 0.9;
     // Acertada a la primera (puede haber sido suerte) / recuperada una vez
     return s.ko === 0 ? Math.min(0.9, priorAcc(CONCEPTS[id].sec) + 0.15) : 0.8;
   }
-  // Probabilidad media de acierto (0-1) y nota estimada (0-10) si el examen fuera ahora mismo
-  const probs = (filter = {}) => conceptIds(filter).map(conceptP);
-  function estimate(filter = {}) {
-    const ps = probs(filter);
+  // Cuánto se recuerda en el momento `at` (1 = recién repasado)
+  const recuerdo = (id, at = now()) => { const s = stat(id); return retencion((at - s.t) / DAY, s.stab); };
+  // Probabilidad estimada de acertar un concepto en el momento `at`: lo aprendido se va
+  // olvidando hacia el azar (o hacia lo que ya sabía de su apartado, si era más)
+  function conceptP(id, at = now()) {
+    const s = stat(id);
+    const prior = priorAcc(CONCEPTS[id].sec);
+    if (!s) return prior; // no visto: se estima por lo que sabe de su apartado
+    const fondo = Math.max(azar, Math.min(prior, techo(id)));
+    return fondo + (techo(id) - fondo) * recuerdo(id, at);
+  }
+  // Probabilidad media de acierto (0-1) y nota estimada (0-10) en el momento `at` (por defecto, ahora)
+  const probs = (filter = {}, at) => conceptIds(filter).map(id => conceptP(id, at));
+  function estimate(filter = {}, at) {
+    const ps = probs(filter, at);
     return ps.length ? ps.reduce((a, p) => a + p, 0) / ps.length : 0;
   }
-  const nota = (filter = {}) => notaDeProbabilidades(probs(filter), formato);
+  const nota = (filter = {}, at) => notaDeProbabilidades(probs(filter, at), formato);
 
   // Recuento EXACTO por preguntas: total, respondidas alguna vez, bien (última respuesta correcta), mal
   function qStats(filter = {}) {
@@ -139,27 +170,34 @@ export function createEngine({ examen, data, state, save }) {
   const hasForecast = () => S.n >= MIN_FORECAST;
   const simNota = sim => notaDeAciertos(sim.score, formato);
 
+  // "¿Estás lista?" se mide para el día del examen (contando lo que se olvidará hasta entonces)
   function readiness() {
-    const all = estimate();
-    const notaAll = nota();
-    const temas = data.temas.map(t => ({ ...t, d: estimate({ tema: t.id }), nota: nota({ tema: t.id }), cov: coverage({ tema: t.id }) }));
+    const at = momentoExamen();
+    const futuro = at > now();
+    const all = estimate({}, at);
+    const notaAll = nota({}, at);
+    const notaHoy = futuro ? nota() : notaAll;
+    const temas = data.temas.map(t => ({ ...t, d: estimate({ tema: t.id }, at), nota: nota({ tema: t.id }, at), cov: coverage({ tema: t.id }) }));
     // Media de los últimos simulacros que pide el nivel: uno solo se puede aprobar por suerte
     const lastN = S.sims.slice(-N.sims);
     const lastSim = lastN.length ? lastN.reduce((a, x) => a + simNota(x), 0) / lastN.length : null;
     const work = remainingWork();
     const checks = [
-      { ok: hasForecast() && notaAll >= N.nota, label: `Nota estimada de ${fmtNota(N.nota)} o más`, info: hasForecast() ? `ahora: ${fmtNota(notaAll)}` : `se calcula a partir de ${MIN_FORECAST} respuestas (llevas ${S.n})` },
+      { ok: hasForecast() && notaAll >= N.nota, label: `Nota estimada${futuro ? ' para el día del examen' : ''} de ${fmtNota(N.nota)} o más`, info: !hasForecast() ? `se calcula a partir de ${MIN_FORECAST} respuestas (llevas ${S.n})` : futuro ? `ese día: ${fmtNota(notaAll)} · hoy: ${fmtNota(notaHoy)}` : `ahora: ${fmtNota(notaAll)}` },
       { ok: hasForecast() && temas.every(t => t.nota >= N.notaTema && t.cov >= N.cobertura), label: `Responder al menos el ${pct(N.cobertura)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id, nivel: true }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') + (work.left ? ` · faltan ${work.left} (≈ ${fmtTime(work.minutes)})` : '') },
       { ok: lastSim !== null && lastN.length >= N.sims && lastSim >= N.notaSim, label: `Simulacros con ${fmtNota(N.notaSim)} o más`, info: lastSim === null ? 'sin hacer' : lastN.length > 1 ? `media de los ${lastN.length} últimos: ${fmtNota(lastSim)}` : `último: ${fmtNota(lastSim)}${N.sims > 1 ? ` (hacen falta ${N.sims})` : ''}` },
     ];
-    return { all, nota: notaAll, temas, lastSim, checks, ready: checks.every(c => c.ok) };
+    return { all, nota: notaAll, notaHoy, futuro, fechaExamen, temas, lastSim, checks, ready: checks.every(c => c.ok) };
   }
 
   function record(qid, ok) {
     const q = Q[qid];
+    const t = now();
     S.n++;
     const c = S.c[q.concepto] || (S.c[q.concepto] = { seen: 0, ok: 0, ko: 0, streak: 0, due: 0, last: -1, lastOk: null, first: null });
     if (c.first == null) c.first = ok;
+    c.stab = nuevaEstabilidad(c.stab, ok, c.t == null ? null : (t - c.t) / DAY);
+    c.t = t;
     c.seen++;
     c.last = S.n;
     c.lastOk = ok;
@@ -186,7 +224,9 @@ export function createEngine({ examen, data, state, save }) {
     let cands = pool.filter(id => !recent.includes(id));
     if (!cands.length) cands = pool;
     const n = S.n;
-    const due = id => stat(id) && stat(id).due <= n;
+    const t = now();
+    // Toca repasarlo: le llega el turno en esta tanda, o se está olvidando (por debajo del 85 % de recuerdo)
+    const due = id => stat(id) && (stat(id).due <= n || (stat(id).lastOk && recuerdo(id, t) < 0.85));
     const byDue = (a, b) => stat(a).due - stat(b).due;
 
     // Intercalar: tras un repaso, si queda temario sin ver, toca una nueva
@@ -201,7 +241,7 @@ export function createEngine({ examen, data, state, save }) {
     if (confirming.length) return confirming[0];
     // 3) Contenido nuevo, priorizando los apartados más flojos (con algún repaso suelto)
     const unseen = cands.filter(id => !stat(id));
-    const reviews = cands.filter(due).sort(byDue);
+    const reviews = cands.filter(due).sort((a, b) => recuerdo(a, t) - recuerdo(b, t)); // lo más olvidado primero
     if (unseen.length && !(reviews.length && Math.random() < 0.1)) return pickWeakSection(unseen);
     // 4) Repasos pendientes
     if (reviews.length) return reviews[0];
