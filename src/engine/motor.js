@@ -1,0 +1,255 @@
+// Motor de estudio de UN examen: modelo de aprendizaje, elección de preguntas y "¿estás lista?".
+// No sabe nada de pantallas ni de qué examen es: recibe el examen (formato, nivel), sus preguntas y el progreso.
+import { formatoEfectivo, nivel as nivelDe, notaDeProbabilidades, notaDeAciertos, fmtNota } from './nota.js';
+
+export const SESSION_LEN = 15;    // preguntas por ronda de práctica
+export const DIAG_LEN = 24;       // preguntas del diagnóstico
+export const SIM_LEN = 40;        // preguntas del simulacro
+export const MASTERY_STREAK = 2;  // aciertos seguidos para dominar un concepto
+export const MIN_FORECAST = 20;   // respuestas mínimas para mostrar la previsión de nota
+
+const pct = x => Math.round(x * 100);
+const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+export function shuffle(a) {
+  const arr = a.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+export const secKey = q => `${q.tema}|${q.seccion}`;
+export const pagKey = q => `${q.tema}-${q.pagina}`;
+export const secName = key => key.slice(key.indexOf('|') + 1);
+
+export function fmtTime(min) {
+  if (min < 60) return `${Math.max(5, Math.round(min / 5) * 5)} min`;
+  const h = Math.round(min / 30) / 2;
+  return `${String(h).replace('.', ',')} h`;
+}
+
+/**
+ * @param examen  { formato: { opciones, penalizacion }, nivel: 'facil' | 'medio' | 'pro' }
+ * @param data    { temas: [...], preguntas: [...] }
+ * @param state   progreso guardado (ver estado.js)
+ * @param save    función que guarda el progreso
+ */
+export function createEngine({ examen, data, state, save }) {
+  let S = state;
+  const formato = formatoEfectivo(examen.formato);
+  const N = nivelDe(examen.nivel);
+  const Q = {};        // id -> pregunta
+  const CONCEPTS = {}; // id -> { id, tema, seccion, sec, qs: [ids], pags: Set }
+  for (const p of data.preguntas) {
+    Q[p.id] = p;
+    const c = (CONCEPTS[p.concepto] ||= { id: p.concepto, tema: p.tema, seccion: p.seccion, sec: secKey(p), qs: [], pags: new Set() });
+    c.qs.push(p.id);
+    c.pags.add(pagKey(p));
+  }
+  // Preguntas que entran en el nivel elegido (sin importancia marcada cuentan como imprescindibles)
+  const enNivel = p => (p.importancia ?? 3) >= N.importanciaMin;
+
+  const stat = id => S.c[id];
+
+  function conceptIds(filter = {}) {
+    return Object.values(CONCEPTS)
+      .filter(c => (!filter.tema || c.tema === filter.tema) && (!filter.sec || c.sec === filter.sec) && (!filter.pag || c.pags.has(filter.pag)))
+      .map(c => c.id);
+  }
+  const seenCount = (filter = {}) => conceptIds(filter).filter(id => stat(id)).length;
+  const failedIds = (filter = {}) => conceptIds(filter).filter(id => stat(id)?.lastOk === false);
+
+  // Claves de apartado (tema|sección) en orden de aparición
+  function sections(tema) {
+    const seen = new Set();
+    const out = [];
+    for (const p of data.preguntas) {
+      if (tema && p.tema !== tema) continue;
+      const k = secKey(p);
+      if (!seen.has(k)) { seen.add(k); out.push(k); }
+    }
+    return out;
+  }
+
+  // Conocimiento previo de un apartado: % de aciertos a la PRIMERA en sus conceptos
+  // (suavizado hacia la media global; sin datos → 50%)
+  let priorCache = { n: -1, map: {} };
+  function priorAcc(sec) {
+    if (priorCache.n !== S.n || priorCache.S !== S) priorCache = { n: S.n, S, map: {} };
+    if (sec in priorCache.map) return priorCache.map[sec];
+    return (priorCache.map[sec] = computePrior(sec));
+  }
+  function computePrior(sec) {
+    let gOk = 0, gN = 0, ok = 0, n = 0;
+    for (const id in S.c) {
+      const s = S.c[id];
+      if (s.first == null || !CONCEPTS[id]) continue;
+      gN++; if (s.first) gOk++;
+      if (CONCEPTS[id].sec === sec) { n++; if (s.first) ok++; }
+    }
+    const g = (gOk + 1) / (gN + 2);
+    return Math.min(0.85, (ok + 3 * g) / (n + 3));
+  }
+  const weakness = sec => 1 - priorAcc(sec);
+  // Sabida: acertada a la primera y nunca fallada, o 2+ aciertos seguidos tras fallarla
+  const mastered = id => { const s = S.c[id]; return !!s && (s.streak >= MASTERY_STREAK || (s.ko === 0 && s.ok > 0)); };
+
+  // Probabilidad estimada de acertar un concepto en el examen
+  function conceptP(id) {
+    const s = stat(id);
+    if (!s) return priorAcc(CONCEPTS[id].sec); // no visto: se estima por lo que sabe de su apartado
+    if (!s.lastOk) return 0.5;                  // último intento fallado (ya vio la corrección)
+    if (s.streak >= MASTERY_STREAK) return 0.9;
+    // Acertada a la primera (puede haber sido suerte) / recuperada una vez
+    return s.ko === 0 ? Math.min(0.9, priorAcc(CONCEPTS[id].sec) + 0.15) : 0.8;
+  }
+  // Probabilidad media de acierto (0-1) y nota estimada (0-10) si el examen fuera ahora mismo
+  const probs = (filter = {}) => conceptIds(filter).map(conceptP);
+  function estimate(filter = {}) {
+    const ps = probs(filter);
+    return ps.length ? ps.reduce((a, p) => a + p, 0) / ps.length : 0;
+  }
+  const nota = (filter = {}) => notaDeProbabilidades(probs(filter), formato);
+
+  // Recuento EXACTO por preguntas: total, respondidas alguna vez, bien (última respuesta correcta), mal
+  function qStats(filter = {}) {
+    let total = 0, seen = 0, ok = 0, ko = 0;
+    for (const p of data.preguntas) {
+      if (filter.tema && p.tema !== filter.tema) continue;
+      if (filter.sec && secKey(p) !== filter.sec) continue;
+      if (filter.pag && pagKey(p) !== filter.pag) continue;
+      if (filter.nivel && !enNivel(p)) continue;
+      total++;
+      const s = S.q[p.id];
+      if (s && s.seen) { seen++; if (s.lastOk) ok++; else ko++; }
+    }
+    return { total, seen, ok, ko, pSeen: total ? seen / total : 0, pOk: total ? ok / total : 0 };
+  }
+  const coverage = (filter = {}) => qStats({ ...filter, nivel: true }).pSeen;
+
+  // Preguntas que faltan por responder para llegar a la cobertura mínima en cada tema, y tiempo aproximado
+  // (≈1,4 respuestas por pregunta nueva contando los repasos de fallos; ≈15 s por respuesta)
+  function remainingWork() {
+    let left = 0;
+    for (const t of data.temas) { const q = qStats({ tema: t.id, nivel: true }); left += Math.max(0, Math.ceil(q.total * N.cobertura) - q.seen); }
+    const minutes = Math.round(left * 1.4 * 15 / 60);
+    return { left, minutes };
+  }
+  const hasForecast = () => S.n >= MIN_FORECAST;
+  const simNota = sim => notaDeAciertos(sim.score, formato);
+
+  function readiness() {
+    const all = estimate();
+    const notaAll = nota();
+    const temas = data.temas.map(t => ({ ...t, d: estimate({ tema: t.id }), nota: nota({ tema: t.id }), cov: coverage({ tema: t.id }) }));
+    // Media de los últimos simulacros que pide el nivel: uno solo se puede aprobar por suerte
+    const lastN = S.sims.slice(-N.sims);
+    const lastSim = lastN.length ? lastN.reduce((a, x) => a + simNota(x), 0) / lastN.length : null;
+    const work = remainingWork();
+    const checks = [
+      { ok: hasForecast() && notaAll >= N.nota, label: `Nota estimada de ${fmtNota(N.nota)} o más`, info: hasForecast() ? `ahora: ${fmtNota(notaAll)}` : `se calcula a partir de ${MIN_FORECAST} respuestas (llevas ${S.n})` },
+      { ok: hasForecast() && temas.every(t => t.nota >= N.notaTema && t.cov >= N.cobertura), label: `Responder al menos el ${pct(N.cobertura)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id, nivel: true }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') + (work.left ? ` · faltan ${work.left} (≈ ${fmtTime(work.minutes)})` : '') },
+      { ok: lastSim !== null && lastN.length >= N.sims && lastSim >= N.notaSim, label: `Simulacros con ${fmtNota(N.notaSim)} o más`, info: lastSim === null ? 'sin hacer' : lastN.length > 1 ? `media de los ${lastN.length} últimos: ${fmtNota(lastSim)}` : `último: ${fmtNota(lastSim)}${N.sims > 1 ? ` (hacen falta ${N.sims})` : ''}` },
+    ];
+    return { all, nota: notaAll, temas, lastSim, checks, ready: checks.every(c => c.ok) };
+  }
+
+  function record(qid, ok) {
+    const q = Q[qid];
+    S.n++;
+    const c = S.c[q.concepto] || (S.c[q.concepto] = { seen: 0, ok: 0, ko: 0, streak: 0, due: 0, last: -1, lastOk: null, first: null });
+    if (c.first == null) c.first = ok;
+    c.seen++;
+    c.last = S.n;
+    c.lastOk = ok;
+    if (ok) {
+      c.ok++;
+      c.streak++;
+      // A la primera: ya la sabe, repaso muy lejano. Recuperando un fallo: vuelve pronto para confirmar.
+      const gap = c.ko === 0 ? 150 : [0, 6, 40, 120][Math.min(c.streak, 3)];
+      c.due = S.n + gap;
+    } else {
+      c.ko++;
+      c.streak = 0;
+      c.due = S.n + 4; // vuelve enseguida
+    }
+    const s = S.q[qid] || (S.q[qid] = { seen: 0, ok: 0 });
+    s.seen++;
+    if (ok) s.ok++;
+    s.lastOk = ok;
+    save();
+  }
+
+  // Elige el siguiente concepto a preguntar (repetición espaciada sencilla)
+  function pickConcept(pool, recent, preferNew = false) {
+    let cands = pool.filter(id => !recent.includes(id));
+    if (!cands.length) cands = pool;
+    const n = S.n;
+    const due = id => stat(id) && stat(id).due <= n;
+    const byDue = (a, b) => stat(a).due - stat(b).due;
+
+    // Intercalar: tras un repaso, si queda temario sin ver, toca una nueva
+    const fresh = cands.filter(id => !stat(id));
+    if (preferNew && fresh.length) return pickWeakSection(fresh);
+
+    // 1) Fallos que ya tocan (siempre primero)
+    const failed = cands.filter(id => due(id) && !stat(id).lastOk).sort((a, b) => stat(b).last - stat(a).last);
+    if (failed.length) return failed[0];
+    // 2) Fallos recuperados que hay que confirmar
+    const confirming = cands.filter(id => due(id) && stat(id).ko > 0 && stat(id).streak < MASTERY_STREAK).sort(byDue);
+    if (confirming.length) return confirming[0];
+    // 3) Contenido nuevo, priorizando los apartados más flojos (con algún repaso suelto)
+    const unseen = cands.filter(id => !stat(id));
+    const reviews = cands.filter(due).sort(byDue);
+    if (unseen.length && !(reviews.length && Math.random() < 0.1)) return pickWeakSection(unseen);
+    // 4) Repasos pendientes
+    if (reviews.length) return reviews[0];
+    // 5) Todo visto y nada pendiente: lo que antes toque
+    return cands.filter(id => stat(id)).sort(byDue)[0] || cands[0];
+  }
+  function pickWeakSection(ids) {
+    const bySec = {};
+    for (const id of ids) (bySec[CONCEPTS[id].sec] ||= []).push(id);
+    const secs = Object.keys(bySec);
+    // Más peso a los apartados flojos y a los grandes (para no agotar primero los pequeños)
+    const w = secs.map(s => (Math.pow(weakness(s), 2) + 0.05) * Math.sqrt(bySec[s].length));
+    let r = Math.random() * w.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < secs.length; i++) {
+      r -= w[i];
+      if (r <= 0) return rand(bySec[secs[i]]);
+    }
+    return rand(bySec[secs[secs.length - 1]]);
+  }
+  // pag: practicando una página concreta, se prefieren las preguntas de esa página
+  function pickQuestion(cid, avoid, pag) {
+    let qs = shuffle(CONCEPTS[cid].qs).sort((a, b) => (S.q[a]?.seen || 0) - (S.q[b]?.seen || 0));
+    if (pag) { const on = qs.filter(id => pagKey(Q[id]) === pag); if (on.length) qs = on; }
+    return qs.find(id => id !== avoid) || qs[0];
+  }
+
+  function buildDiag() {
+    const secs = shuffle(sections());
+    const bySec = Object.fromEntries(secs.map(s => [s, shuffle(conceptIds({ sec: s }))]));
+    const out = [];
+    let round = 0;
+    while (out.length < DIAG_LEN && round < 50) {
+      for (const s of secs) {
+        if (out.length >= DIAG_LEN) break;
+        const cid = bySec[s][round];
+        if (cid) out.push(pickQuestion(cid));
+      }
+      round++;
+    }
+    return shuffle(out);
+  }
+  const buildSim = () => shuffle(conceptIds()).slice(0, SIM_LEN).map(cid => pickQuestion(cid));
+
+  return {
+    data, Q, formato, nivel: N,
+    get state() { return S; },
+    reset(newState) { S = newState; save(); },
+    conceptIds, seenCount, failedIds, sections, mastered, estimate, nota, qStats, coverage,
+    remainingWork, hasForecast, simNota, readiness, record, pickConcept, pickQuestion, buildDiag, buildSim,
+  };
+}

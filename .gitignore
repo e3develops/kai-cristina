@@ -1,3 +1,7 @@
 # Material original del libro (con copyright): no se publica
 fuentes/
 .claude/
+
+node_modules/
+dist/
+.wrangler/

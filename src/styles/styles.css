@@ -163,6 +163,7 @@ b { font-weight: 800; }
 .ready-card h3 { grid-column: 2; align-self: end; }
 .ready-card h3 + p { grid-column: 2; align-self: start; margin-top: 4px !important; line-height: 1.4; }
 .ready-card .checks { grid-column: 1 / -1; }
+.ready-card .ready-note { grid-column: 1 / -1; margin-top: 6px; }
 .ring { --p: 0; --c: var(--primary); width: 96px; height: 96px; flex: 0 0 96px; border-radius: 50%;
   background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--bg-2) 0);
   display: grid; place-items: center; position: relative; transition: --p 1s var(--ease); }

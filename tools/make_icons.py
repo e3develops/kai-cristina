@@ -1,6 +1,8 @@
 """Genera los iconos de la app (cara de KAI) con PIL."""
+import os
 from PIL import Image, ImageDraw
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 S = 1024
 img = Image.new('RGB', (S, S), '#0FA38C')
 d = ImageDraw.Draw(img)
@@ -37,5 +39,5 @@ d.rounded_rectangle([260, 850, 764, 1100], radius=70, fill='#F7B84B', outline='#
 d.rounded_rectangle([482, 760, 542, 860], radius=20, fill='#94A3B8', outline='#64748B', width=10)
 
 for size, name in [(512, 'icon-512.png'), (192, 'icon-192.png'), (180, 'apple-touch-icon.png')]:
-    img.resize((size, size), Image.LANCZOS).save(f'icons/{name}')
+    img.resize((size, size), Image.LANCZOS).save(os.path.join(ROOT, 'public', 'icons', name))
 print('ok')

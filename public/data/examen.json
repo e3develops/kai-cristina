@@ -1,0 +1,11 @@
+{
+  "id": "cap28-taller2",
+  "nombre": "Cap. 28 y Taller 2",
+  "fecha": null,
+  "formato": { "opciones": 4, "penalizacion": null },
+  "nivel": "medio",
+  "almacen": "kai-cristina-v1",
+  "preguntas": "data/preguntas.json",
+  "documentos": "data/documentos.json",
+  "resaltados": "data/resaltados.json"
+}

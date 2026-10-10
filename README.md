@@ -1,17 +1,41 @@
 # KAI · Estudia con Cristina 🤖🩺
 
-App web (PWA) de tests inteligentes para preparar los exámenes de enfermería.
+App web (PWA) de tests inteligentes para preparar exámenes con tus propios apuntes.
 Todas las preguntas salen literalmente de los apuntes; cada una guarda la cita y la página.
+
+Plan de evolución (multiusuario, niveles, fábrica de preguntas): [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
 
 ## Estructura
 
-- `index.html`, `css/`, `js/`: la app (HTML + JS sin compilación).
-  - `js/app.js`: pantallas y motor de aprendizaje (repetición espaciada + nota estimada).
-  - `js/kai.js`: la mascota KAI en SVG.
-- `data/preguntas.json`: banco de preguntas que carga la app (se genera, no se edita a mano).
+- `index.html` + `src/`: la app, compilada con **Vite**.
+  - `src/app.js`: pantallas.
+  - `src/engine/`: el motor de estudio, independiente de las pantallas y del contenido.
+    - `motor.js`: modelo de aprendizaje (repetición espaciada), elección de preguntas y "¿estás lista?".
+    - `nota.js`: nota sobre 10 según el formato del examen, y niveles (Fácil · Medio · Pro).
+    - `estado.js`: progreso guardado en el dispositivo (localStorage).
+  - `src/config.js`: quién usa la app y qué examen se carga.
+  - `src/kai.js`, `src/kaifun.js`: la mascota KAI y sus easter eggs.
+  - `src/sw.js`: plantilla del service worker (la compilación rellena la lista de ficheros).
+- `public/`: se publica tal cual.
+  - `data/examen.json`: el examen (nombre, formato, nivel y de dónde salen sus datos).
+  - `data/preguntas.json`: banco de preguntas (se genera, no se edita a mano).
+  - `data/documentos.json`, `data/resaltados.json`, `paginas/`: apuntes y subrayados del visor.
 - `fuentes/` (**no se sube a git**): fotos/PDF del libro, transcripciones y bancos por bloque.
-- `tools/build_preguntas.py`: une y valida `fuentes/preguntas/*.json` → `data/preguntas.json`.
-- `tools/make_icons.py`: genera los iconos.
+- `tools/`: scripts de Python para generar preguntas, páginas, índice de apuntes e iconos.
+- `tests/`: tests del motor (`npm test`).
+
+## Formato del examen y niveles
+
+`data/examen.json` define el formato: nº de opciones y cuánto resta cada fallo (`penalizacion`, `null` = "no lo sé":
+se asume 4 opciones y −1/3). La nota estimada y la de los simulacros se calculan sobre 10 con ese formato.
+
+| Nivel | Promete | Superado cuando… |
+|---|---|---|
+| Fácil | 5-6 | nota estimada ≥ 6,0 · todo lo ★★★ visto · 1 simulacro ≥ 6 |
+| Medio | 7-8 | ≥ 7,5 · ≥ 80 % de cada tema respondido · media de 2 simulacros ≥ 7,5 |
+| Pro | 9-10 | ≥ 9,0 · ≥ 95 % · media de 2 simulacros ≥ 9 |
+
+Son hipótesis iniciales: se recalibrarán con las notas reales de los exámenes.
 
 ## Añadir contenido nuevo
 
@@ -19,29 +43,28 @@ Todas las preguntas salen literalmente de los apuntes; cada una guarda la cita y
    `id, tema, seccion, concepto, pregunta, opciones[4], correcta (0-3), fuente (cita literal), pagina`.
 2. Si es un tema nuevo, añadirlo a `TEMAS` en `tools/build_preguntas.py`.
 3. `python tools/build_preguntas.py`
-4. Si hay páginas nuevas en `paginas/`: `python tools/build_documentos.py` (índice de apuntes, miniaturas y aviso de páginas que faltan).
+4. Si hay páginas nuevas en `public/paginas/`: `python tools/build_documentos.py` (índice de apuntes, miniaturas y aviso de páginas que faltan).
 
-## Probar en local
+## Desarrollo
 
 ```
-python -m http.server 5173
+npm install
+npm run dev       # http://localhost:5173
+npm test          # tests del motor
+npm run build     # compila en dist/
+npm run preview   # sirve dist/ (con service worker)
 ```
-
-y abrir http://localhost:5173
 
 ## Cómo decide KAI
 
 - **Prioridad en la práctica**: fallos recientes (vuelven a las ~4 preguntas) → fallos recuperados por confirmar (~6) → preguntas nuevas de los apartados más flojos y grandes. Tras un repaso siempre va una nueva.
 - **"Bien" (progreso)**: la última vez que salió la pregunta, se acertó. Un fallo recuperado necesita 2 aciertos seguidos para darse por confirmado.
-- **Previsión de nota**: media de la probabilidad de acierto de cada concepto (lo no visto se estima por lo acertado a la primera en su apartado). Se muestra a partir de 20 respuestas.
-- **"¡Estás lista!"**: previsión de nota ≥ 82 %, cada tema con ≥ 80 % de sus preguntas respondidas y ≥ 70 % de previsión, y media de los 2 últimos simulacros ≥ 80 %.
+- **Nota estimada**: probabilidad de acierto de cada concepto (lo no visto se estima por lo acertado a la primera en su apartado), convertida a nota sobre 10 con el formato del examen. Se muestra a partir de 20 respuestas.
+- **"¡Estás lista!"**: lo que pida el nivel elegido (tabla de arriba).
 - El progreso se guarda en el navegador del dispositivo (localStorage).
 
 ## Publicar una versión nueva
 
-```
-python tools/bump_version.py
-git add -A && git commit -m "..." && git push
-```
-
-Al abrirse, la app compara su versión con `version.json` y, si hay una nueva, limpia la caché y se recarga sola.
+Basta con hacer push a `main`: GitHub Actions pasa los tests, compila y publica en GitHub Pages.
+La versión es la fecha y hora de la compilación; al abrirse, la app compara la suya con `version.json`
+y, si hay una nueva, limpia la caché y se recarga sola.

@@ -1,10 +1,8 @@
 // Precarga todo para que funcione sin conexión. Luego: red primero (con límite de tiempo)
 // para recibir siempre las preguntas nuevas, y caché como respaldo.
-const CACHE = 'kai-v4';
-const CORE = [
-  './', 'index.html', 'css/styles.css', 'css/kai.css', 'js/kaifun.js', 'js/app.js', 'js/kai.js', 'js/install.js', 'js/installart.js', 'data/preguntas.json', 'data/documentos.json',
-  'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
-];
+// Plantilla: al compilar, vite.config.js rellena el nombre de la caché y la lista de ficheros.
+const CACHE = '__CACHE__';
+const CORE = ['__PRECACHE__'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));

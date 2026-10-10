@@ -52,7 +52,7 @@ if errores:
 orden = {t["id"]: i for i, t in enumerate(TEMAS)}
 preguntas.sort(key=lambda q: (orden[q["tema"]], q["pagina"], q["id"]))
 out = {"version": 1, "temas": TEMAS, "preguntas": preguntas}
-with open(os.path.join(ROOT, "data", "preguntas.json"), "w", encoding="utf-8") as f:
+with open(os.path.join(ROOT, "public", "data", "preguntas.json"), "w", encoding="utf-8") as f:
     json.dump(out, f, ensure_ascii=False, indent=1)
 
 print(f"\nTotal: {len(preguntas)} preguntas, {len({q['concepto'] for q in preguntas})} conceptos")
