@@ -88,6 +88,13 @@ export function registrarApuntes(app) {
     return c.json({ ok: true });
   });
 
+  // Email de prueba al administrador (para comprobar que Email Routing funciona)
+  app.post('/api/admin/probar-aviso', async c => {
+    if (!esAdmin(c.env, c.get('user'))) return c.json({ error: 'No existe' }, 404);
+    const ok = await avisarAdmin(c.env, 'KAI: email de prueba', '¡Hola! Si lees esto, los avisos de KAI te llegan bien. 🤖💙');
+    return ok ? c.json({ ok: true }) : c.json({ error: 'No se pudo enviar: revisa Email Routing en Cloudflare (registros MX y SPF).' }, 502);
+  });
+
   // Panel del administrador: exámenes por preparar y espacio usado
   app.get('/api/admin/resumen', async c => {
     if (!esAdmin(c.env, c.get('user'))) return c.json({ error: 'No existe' }, 404);

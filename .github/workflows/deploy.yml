@@ -1,6 +1,7 @@
-# Cada push a main: tests → compilación con Vite → publicación en GitHub Pages.
-# La app detecta la versión nueva (version.json) y se actualiza sola en el móvil.
-name: Publicar KAI
+# Cada push a main: tests y compilación.
+# La app se publica en Cloudflare (kai.e3develops.com) con `npm run deploy`.
+# GitHub Pages (la dirección antigua) solo sirve la página "KAI se ha mudado" (carpeta mudanza/).
+name: Tests y página de mudanza
 
 on:
   push:
@@ -17,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,16 +29,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
 
-  deploy:
-    needs: build
+  mudanza:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: mudanza
       - id: deployment
         uses: actions/deploy-pages@v4

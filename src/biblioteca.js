@@ -484,8 +484,12 @@ export async function showAdmin() {
         <div class="lib-ex-top"><b>${esc(p.nombre)}</b><span class="pill info">${p.archivos} archivos · ${fmtMB(p.bytes)}</span></div>
         <span class="muted small">${esc(p.usuario)} (${esc(p.email)})${p.fecha ? ` · examen el ${fmtFecha(p.fecha)}` : ''} · enviado ${new Date(p.enviado).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</span>
         <code class="cmd">node tools/fabrica.mjs descargar ${esc(p.id)}</code></div>`).join('') : '<p class="muted">Nada pendiente 🎉</p>'}
+      <button class="btn secondary" id="probar-aviso">📧 Enviar email de prueba</button>
       ${tabbar('')}
     </div>`);
   app.querySelector('#volver').onclick = showInicio;
+  app.querySelector('#probar-aviso').onclick = async () => {
+    if (await conConexion(() => api.probarAviso())) aviso('Enviado: mira tu bandeja de entrada 📬', 4000);
+  };
   bindComun();
 }

@@ -75,6 +75,13 @@ afinar con notas reales.
 
 ## Publicar una versión nueva
 
-Basta con hacer push a `main`: GitHub Actions pasa los tests, compila y publica en GitHub Pages.
-La versión es la fecha y hora de la compilación; al abrirse, la app compara la suya con `version.json`
-y, si hay una nueva, limpia la caché y se recarga sola.
+```
+npm run deploy
+```
+
+Pasa los tests, compila, aplica las migraciones pendientes de la base de datos y publica en Cloudflare
+(https://kai.e3develops.com). La versión es la fecha y hora de la compilación; al abrirse, la app compara
+la suya con `version.json` y, si hay una nueva, limpia la caché y se recarga sola.
+
+La dirección antigua (GitHub Pages) solo sirve la página "KAI se ha mudado" (`mudanza/`), que se queda
+guardada en los móviles que tenían la app vieja.

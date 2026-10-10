@@ -39,6 +39,7 @@ export const api = {
   enviarExamen: id => req(`/api/examenes/${id}/enviar`, { method: 'POST', body: '{}' }),
   visto: id => req(`/api/examenes/${id}/visto`, { method: 'POST', body: '{}' }),
   adminResumen: () => req('/api/admin/resumen'),
+  probarAviso: () => req('/api/admin/probar-aviso', { method: 'POST', body: '{}' }),
   // El archivo va tal cual en el cuerpo (no en JSON)
   subirDocumento: (id, blob, nombre) => req(`/api/examenes/${id}/documentos`, { method: 'POST', body: blob, headers: { 'Content-Type': blob.type, 'X-Nombre': encodeURIComponent(nombre) } }),
   salir: () => req('/api/auth/sign-out', { method: 'POST', body: '{}' }),
