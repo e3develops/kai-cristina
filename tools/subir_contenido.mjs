@@ -27,8 +27,8 @@ const bulk = join(tmp, 'bulk.json');
 writeFileSync(bulk, JSON.stringify(entries));
 console.log(`${entries.length} ficheros de ${dir} → KV (${modo === '--local' ? 'local' : 'Cloudflare'})`);
 try {
-  execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    ['wrangler', 'kv', 'bulk', 'put', bulk, '--binding', 'CONTENIDO', modo, ...(modo === '--local' ? ['--persist-to', '.wrangler/state'] : [])], { stdio: 'inherit', shell: process.platform === 'win32' });
+  execFileSync(process.execPath,
+    [join('node_modules', 'wrangler', 'bin', 'wrangler.js'), 'kv', 'bulk', 'put', bulk, '--binding', 'CONTENIDO', modo, ...(modo === '--local' ? ['--persist-to', '.wrangler/state'] : [])], { stdio: 'inherit' });
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

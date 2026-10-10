@@ -62,15 +62,83 @@ function bindComun() {
 function abrir(id) {
   const e = LIB.examenes.find(x => x.id === id);
   if (!e) return;
-  if (e.estado !== 'listo') return modal(`
-    <div class="kai-row"><div class="kai-wrap">${kaiSVG('think')}</div><div class="bubble">Este examen aún no tiene apuntes preparados.</div></div>
-    <p>Muy pronto podrás subir tus fotos o PDF y yo me encargo de sacar las preguntas.</p>
-    <button class="btn secondary" data-a="editar">Editar examen</button>
-    <button class="btn ghost" data-a="close">Cerrar</button>`, (el, close) => {
-    el.querySelector('[data-a=close]').onclick = close;
-    el.querySelector('[data-a=editar]').onclick = () => { close(); formExamen(e.asignatura, e); };
-  });
+  if (e.estado !== 'listo') return showApuntes(e);
+  if (e.listoAviso) api.visto(e.id).catch(() => {});
   ctx.abrirExamen(id, asignaturaDe(e));
+}
+
+// ---------- Apuntes de un examen: subir, quitar y "prepárame este examen" ----------
+const fmtMB = b => `${(b / 1024 / 1024).toFixed(b < 10 * 1024 * 1024 ? 1 : 0).replace('.', ',')} MB`;
+export async function showApuntes(e) {
+  const volver = () => (e.asignatura ? showAsignatura(e.asignatura) : showInicio());
+  pintarApuntes(e, null);
+  let info;
+  try { info = await api.documentos(e.id); } catch (err) {
+    if (err instanceof SinSesion) return ctx.entrar();
+    info = null;
+  }
+  if (!app.querySelector('#apuntes')) return; // ya se ha ido a otra pantalla
+  pintarApuntes(e, info, volver);
+}
+function pintarApuntes(e, info, volver = () => showInicio()) {
+  const docs = info?.documentos || [];
+  const procesando = e.estado === 'procesando';
+  const lista = docs.map(d => `<div class="card doc-fila"><span class="doc-ic">${d.tipo === 'application/pdf' ? '📄' : '🖼️'}</span>
+      <span class="doc-txt"><b>${esc(d.nombre)}</b><span class="muted small">${fmtMB(d.bytes)}</span></span>
+      ${procesando ? '' : `<button class="icon-btn" data-borrar="${d.id}" aria-label="Quitar ${esc(d.nombre)}">🗑️</button>`}</div>`).join('');
+  const usado = info ? `<div class="cuota"><div class="bar"><i style="width:${Math.min(100, pct(info.usado / info.limite))}%"></i></div><span class="muted small">Tu espacio: ${fmtMB(info.usado)} de ${fmtMB(info.limite)}</span></div>` : '';
+  render(`
+    <div class="screen lib" id="apuntes">
+      <div class="topbar"><button class="back-link" id="volver">‹ ${esc(asignaturaDe(e)?.nombre || 'Inicio')}</button><button class="icon-btn" id="editar" aria-label="Editar examen">✏️</button></div>
+      <h1>${esc(e.nombre)}</h1>
+      <div class="kai-row"><div class="kai-wrap">${kaiSVG()}</div><div class="bubble">${procesando
+        ? '<p>¡Recibido! 📚 Estoy preparando tus preguntas. Te aviso en cuanto estén listas.</p>'
+        : '<p>Sube las <b>fotos o PDF</b> de todo lo que entra en el examen. Cuanto más completo, mejores preguntas 💪</p><p class="muted small">Fotos de frente, con buena luz y una página por foto.</p>'}</div></div>
+      ${procesando ? '' : `<div class="subir">
+        <label class="btn secondary">📷 Hacer fotos<input type="file" accept="image/*" capture="environment" multiple hidden data-subir></label>
+        <label class="btn secondary">📁 Elegir archivos<input type="file" accept="image/*,application/pdf" multiple hidden data-subir></label>
+      </div>`}
+      <div id="progreso"></div>
+      ${info === null ? '<p class="muted">Cargando…</p>' : docs.length ? `<div class="section-title"><h2>${docs.length} ${docs.length === 1 ? 'archivo' : 'archivos'}</h2></div>${lista}` : '<p class="muted">Aún no has subido nada.</p>'}
+      ${usado}
+      ${procesando ? '' : `<button class="btn" id="enviar" ${docs.length ? '' : 'disabled'}>✨ Prepárame este examen</button>`}
+      ${tabbar('asignaturas')}
+    </div>`, procesando ? 'happy' : 'talk');
+  bindComun();
+  app.querySelector('#volver').onclick = volver;
+  app.querySelector('#editar').onclick = () => formExamen(e.asignatura, e);
+  app.querySelectorAll('[data-subir]').forEach(inp => inp.onchange = () => subir(e, [...inp.files]));
+  app.querySelectorAll('[data-borrar]').forEach(b => b.onclick = async () => {
+    if (!confirm('¿Quitar este archivo?')) return;
+    if (await conConexion(() => api.borrarDocumento(b.dataset.borrar))) showApuntes(e);
+  });
+  app.querySelector('#enviar')?.addEventListener('click', async () => {
+    if (!confirm('¿Envío tus apuntes para preparar las preguntas? Mientras tanto no se podrán cambiar.')) return;
+    if (!(await conConexion(() => api.enviarExamen(e.id)))) return;
+    await cargarBiblioteca();
+    showApuntes(LIB.examenes.find(x => x.id === e.id) || e);
+  });
+}
+async function subir(e, files) {
+  if (!files.length) return;
+  const { comprimirImagen } = await import('./comprimir.js');
+  const prog = app.querySelector('#progreso');
+  let hechos = 0, fallos = [];
+  for (const file of files) {
+    prog.innerHTML = `<div class="card subiendo"><b>Subiendo ${hechos + 1} de ${files.length}…</b><div class="bar"><i style="width:${pct(hechos / files.length)}%"></i></div></div>`;
+    try {
+      const blob = await comprimirImagen(file);
+      await api.subirDocumento(e.id, blob, file.name || 'foto.jpg');
+      hechos++;
+    } catch (err) {
+      if (err instanceof SinSesion) return ctx.entrar();
+      fallos.push(err instanceof SinConexion ? 'Sin conexión' : err.message);
+      if (err instanceof SinConexion || /límite|espacio|muchos/.test(err.message)) break; // no tiene sentido seguir
+    }
+  }
+  if (fallos.length) aviso(`${hechos ? `Subidos ${hechos}. ` : ''}${fallos[0]}`, 5000);
+  else aviso(hechos === 1 ? 'Archivo subido' : `${hechos} archivos subidos`);
+  showApuntes(e);
 }
 
 // Tarjeta de un examen: nombre, cuándo es, nivel y previsión, y progreso
@@ -87,7 +155,7 @@ function tarjetaExamen(e, { conAsignatura = true } = {}) {
   }
   if (e.estado !== 'listo') {
     return `<div class="card lib-ex preparando" data-examen="${e.id}"><div class="lib-ex-top"><b>${nombre}</b><span class="pill info">${e.estado === 'procesando' ? 'preparando' : 'sin apuntes'}</span></div>
-      <div class="muted small">${e.fecha ? `${fmtFecha(e.fecha)} · ` : ''}${e.estado === 'procesando' ? 'Te aviso cuando esté listo' : 'Sube tus apuntes para empezar'}</div></div>`;
+      <div class="muted small">${e.fecha ? `${fmtFecha(e.fecha)} · ` : ''}${e.estado === 'procesando' ? 'Preparando tus preguntas: te aviso cuando estén' : 'Toca para subir tus apuntes'}</div></div>`;
   }
   const chip = dias == null ? '' : dias < 0 ? `<button class="pill warn" data-nota="${e.id}">¿qué nota sacaste?</button>` : `<span class="pill ${dias <= 7 ? 'warn' : ''}">${fmtDias(dias)}</span>`;
   const prev = r && r.respuestas >= 20 ? `nota prevista ${fmtRango(r.rango)} ${why('b-rango', e.id)}` : r && r.respuestas > 0 ? 'calculando tu nota…' : 'sin empezar';
@@ -127,6 +195,7 @@ export async function showInicio() {
         <button class="avatar" id="cuenta" aria-label="Tu cuenta">${esc(ctx.iniciales())}</button>
       </div>
       <div class="kai-row"><div class="kai-wrap">${kaiSVG()}</div><div class="bubble">${bocadillo}</div></div>
+      ${ex.filter(e => e.listoAviso && e.estado === 'listo').map(e => `<div class="card listo-card"><b>🎉 ¡Tus apuntes de ${esc(e.nombre)} ya están listos!</b><span class="muted small">He preparado ${e.preguntas ? `${e.preguntas} preguntas` : 'tus preguntas'} con ellos. ¿Empezamos?</span><button class="btn" data-examen="${e.id}">¡Vamos!</button></div>`).join('')}
       ${sinNota.map(e => `<div class="card nota-card"><b>¿Qué tal ${esc(e.nombre)}?</b><span class="muted small">Fue el ${fmtFecha(e.fecha)}. Apunta tu nota y así afino mis previsiones.</span><button class="btn secondary" data-nota="${e.id}">Apuntar mi nota</button></div>`).join('')}
       ${proximos.length ? `<div class="section-title"><h2>Próximos exámenes</h2></div>${proximos.map(e => tarjetaExamen(e)).join('')}` : ''}
       ${tabbar('inicio')}
@@ -245,7 +314,7 @@ export function formExamen(asignaturaId, e = null) {
         <div class="campo"><span>Opciones por pregunta</span>${seg('opciones', [[3, '3'], [4, '4'], [5, '5']], opciones)}</div>
         <div class="campo"><span>¿Restan los fallos? ${why('b-resta')}</span>${seg('resta', [['no', 'No'], ['si', 'Sí, 1 de cada ' + (opciones - 1)], ['nose', 'No lo sé']], resta)}</div>
         <div class="campo"><span>Nivel ${why('b-niveles')}</span>${seg('nivel', Object.values(NIVELES).map(n => [n.id, `${n.nombre} <small>${n.promete}</small>`]), nivel)}</div>
-        <p class="muted small">Los apuntes (fotos o PDF) los podrás subir muy pronto.</p>
+        ${e ? '' : '<p class="muted small">Después subes tus apuntes (fotos o PDF) y yo preparo las preguntas.</p>'}
         <p class="form-err" role="alert"></p>
         <button class="btn" type="submit">${e ? 'Guardar' : 'Crear examen'}</button>
         ${e ? '<button class="btn ghost peligro" type="button" id="borrar">Borrar examen</button>' : ''}
@@ -273,6 +342,7 @@ export function formExamen(asignaturaId, e = null) {
     const r = await conConexion(() => (e ? api.editarExamen(e.id, datos) : api.crearExamen(datos)));
     if (!r) return;
     await cargarBiblioteca();
+    if (!e) return showApuntes(LIB.examenes.find(x => x.id === r.id) || r);
     volver();
   };
   f.querySelector('#borrar')?.addEventListener('click', async () => {
@@ -391,4 +461,31 @@ export function explicarBiblioteca(key, arg) {
     };
     default: return null;
   }
+}
+
+// ---------- Panel del administrador ----------
+export async function showAdmin() {
+  render(`<div class="screen lib" id="admin"><div class="topbar"><button class="back-link" id="volver">‹ Inicio</button></div><h1>Administración</h1><p class="muted">Cargando…</p>${tabbar('')}</div>`);
+  app.querySelector('#volver').onclick = showInicio;
+  bindComun();
+  let r;
+  try { r = await api.adminResumen(); } catch (e) { return aviso(e instanceof SinConexion ? 'Necesitas conexión' : e.message); }
+  if (!app.querySelector('#admin')) return;
+  const e = r.espacio;
+  render(`
+    <div class="screen lib" id="admin">
+      <div class="topbar"><button class="back-link" id="volver">‹ Inicio</button></div>
+      <h1>Administración</h1>
+      <div class="card"><b>Espacio de apuntes</b>
+        <div class="bar"><i style="width:${Math.min(100, pct(e.usado / e.tope))}%"></i></div>
+        <span class="muted small">${fmtMB(e.usado)} de ${fmtMB(e.tope)} (tope para no salir de lo gratuito) · ${e.archivos} archivos · ${r.usuarios} usuarios</span></div>
+      <div class="section-title"><h2>Por preparar (${r.pendientes.length})</h2></div>
+      ${r.pendientes.length ? r.pendientes.map(p => `<div class="card lib-ex">
+        <div class="lib-ex-top"><b>${esc(p.nombre)}</b><span class="pill info">${p.archivos} archivos · ${fmtMB(p.bytes)}</span></div>
+        <span class="muted small">${esc(p.usuario)} (${esc(p.email)})${p.fecha ? ` · examen el ${fmtFecha(p.fecha)}` : ''} · enviado ${new Date(p.enviado).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</span>
+        <code class="cmd">node tools/fabrica.mjs descargar ${esc(p.id)}</code></div>`).join('') : '<p class="muted">Nada pendiente 🎉</p>'}
+      ${tabbar('')}
+    </div>`);
+  app.querySelector('#volver').onclick = showInicio;
+  bindComun();
 }

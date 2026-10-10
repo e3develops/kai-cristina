@@ -7,7 +7,7 @@ import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, D
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
 import { fmtNota, describeFormato } from './engine/nota.js';
 import { why, explicacion, fmtRango } from './porque.js';
-import { configurarBiblioteca, cargarBiblioteca, showInicio, showAsignatura, formExamen, explicarBiblioteca, olvidarBiblioteca } from './biblioteca.js';
+import { configurarBiblioteca, cargarBiblioteca, showInicio, showAsignatura, formExamen, showAdmin, explicarBiblioteca, olvidarBiblioteca } from './biblioteca.js';
 
 // ------------------------------------------------------------------
 // Configuración
@@ -1056,10 +1056,12 @@ function menuCuenta() {
   modal(`
     <h2>Tu cuenta</h2>
     <p class="muted small"><b>${esc(u.nombre || '')}</b><br>${esc(u.email || '')}<br>Tu progreso se guarda en tu cuenta: puedes seguir desde cualquier dispositivo.</p>
+    ${u.admin ? '<button class="btn secondary" data-a="admin">🛠️ Administración</button>' : ''}
     <button class="btn secondary" data-a="salir">🚪 Cerrar sesión</button>
     <button class="btn ghost" data-a="close">Cerrar</button>
     <p class="footer">Hecho con 💙 por ${CREATOR} · KAI · versión ${VERSION}</p>`, (el, close) => {
     el.querySelector('[data-a=close]').onclick = close;
+    el.querySelector('[data-a=admin]')?.addEventListener('click', () => { close(); showAdmin(); });
     el.querySelector('[data-a=salir]').onclick = () => { if (confirm('¿Cerrar sesión en este dispositivo? Tu progreso queda guardado en tu cuenta.')) cerrarSesion(); };
   });
 }
@@ -1071,6 +1073,8 @@ const ERRORES = {
   'User already exists. Use another email.': 'Ya hay una cuenta con ese correo. Prueba a entrar.',
   'Password too short': 'La contraseña tiene que tener al menos 8 caracteres.',
   'Invalid email': 'Ese correo no parece válido.',
+  'Captcha verification failed': 'No he podido comprobar que no eres un robot 🤖 Vuelve a intentarlo.',
+  'Missing CAPTCHA response': 'Espera un segundo a que compruebe que no eres un robot y vuelve a pulsar.',
 };
 function showLogin(modo = 'entrar') {
   const crear = modo === 'crear';
@@ -1082,6 +1086,7 @@ function showLogin(modo = 'entrar') {
         ${crear ? '<label>Tu nombre<input name="name" autocomplete="given-name" required></label>' : ''}
         <label>Correo<input name="email" type="email" autocomplete="email" inputmode="email" required></label>
         <label>Contraseña<input name="password" type="password" minlength="8" autocomplete="${crear ? 'new-password' : 'current-password'}" required></label>
+        <div class="captcha" id="captcha"></div>
         <p class="login-err" role="alert"></p>
         <button class="btn" type="submit">${crear ? 'Crear cuenta' : 'Entrar'}</button>
       </form>
@@ -1099,16 +1104,49 @@ function showLogin(modo = 'entrar') {
     btn.disabled = true;
     err.textContent = '';
     try {
-      if (crear) await api.crearCuenta(f.name.trim(), f.email.trim(), f.password);
-      else await api.entrar(f.email.trim(), f.password);
+      const token = await antibots.token();
+      if (crear) await api.crearCuenta(f.name.trim(), f.email.trim(), f.password, token);
+      else await api.entrar(f.email.trim(), f.password, token);
       pantallaCarga('Preparando tus cosas…');
       arrancar();
     } catch (e2) {
       err.textContent = e2 instanceof SinConexion ? 'No tengo conexión. Inténtalo en un momento.' : (ERRORES[e2.message] || e2.message);
       btn.disabled = false;
+      antibots.reiniciar(); // cada respuesta del antibots vale una sola vez
     }
   };
+  antibots.montar(app.querySelector('#captcha'));
 }
+
+// Antibots (Cloudflare Turnstile): casi siempre invisible; solo pide un clic si sospecha
+const antibots = (() => {
+  let sitekey, widget = null, token = null, esperando = [];
+  const listo = t => { token = t; esperando.forEach(fn => fn(t)); esperando = []; };
+  const cargarScript = () => new Promise((ok, ko) => {
+    if (window.turnstile) return ok();
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.onload = ok; s.onerror = ko;
+    document.head.appendChild(s);
+  });
+  return {
+    async montar(el) {
+      token = null; widget = null;
+      try {
+        if (sitekey === undefined) sitekey = (await api.config()).turnstile || null;
+        if (!sitekey || !el?.isConnected) return;
+        await cargarScript();
+        widget = window.turnstile.render(el, { sitekey, appearance: 'interaction-only', language: 'es', callback: listo, 'expired-callback': () => { token = null; } });
+      } catch (e) { /* sin antibots configurado o sin conexión */ }
+    },
+    // Espera (como mucho 8 s) a que el antibots dé su visto bueno
+    token() {
+      if (!sitekey || token) return Promise.resolve(token);
+      return new Promise(res => { esperando.push(res); setTimeout(() => res(token), 8000); });
+    },
+    reiniciar() { token = null; try { if (widget != null) window.turnstile.reset(widget); } catch (e) { /* nada */ } },
+  };
+})();
 
 async function cerrarSesion() {
   await sync();

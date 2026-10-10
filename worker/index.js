@@ -3,11 +3,15 @@ import { Hono } from 'hono';
 import { crearAuth, esAdmin } from './auth.js';
 import { mergeState } from '../src/engine/estado.js';
 import { validarAsignatura, validarExamen } from './validar.js';
+import { registrarApuntes } from './apuntes.js';
 
 const app = new Hono();
 
 // Better Auth: registro, inicio y cierre de sesión…
 app.on(['GET', 'POST'], '/api/auth/*', c => crearAuth(c.env, c.req.raw).handler(c.req.raw));
+
+// Configuración pública (antes de entrar): la clave pública del antibots
+app.get('/api/config', c => c.json({ turnstile: c.env.TURNSTILE_SECRET ? c.env.TURNSTILE_SITEKEY || null : null }));
 
 // El resto de la API necesita sesión
 app.use('/api/*', async (c, next) => {
@@ -31,6 +35,7 @@ const aJson = row => ({
   id: row.id, nombre: row.nombre, fecha: row.fecha, nivel: row.nivel, asignatura: row.asignatura_id,
   formato: { opciones: row.opciones, penalizacion: row.penalizacion },
   estado: row.estado, notaReal: row.nota_real, prevision: json(row.prevision), resumen: json(row.resumen),
+  enviado: row.enviado ?? null, listoAviso: !!row.listo_aviso,
 });
 const leerJson = async c => { try { return await c.req.json(); } catch (e) { return {}; } };
 
@@ -104,7 +109,11 @@ app.patch('/api/examenes/:id', async c => {
 app.delete('/api/examenes/:id', async c => {
   const row = await examenDe(c);
   if (!row || row.user_id !== c.get('user').id) return c.json({ error: 'No existe' }, 404);
+  // Sus apuntes también se borran de R2
+  const { results: docs } = await c.env.DB.prepare('select clave from documento where examen_id = ?').bind(row.id).all();
+  if (docs.length && c.env.APUNTES) await c.env.APUNTES.delete(docs.map(d => d.clave));
   await c.env.DB.batch([
+    c.env.DB.prepare('delete from documento where examen_id = ?').bind(row.id),
     c.env.DB.prepare('delete from progreso where examen_id = ?').bind(row.id),
     c.env.DB.prepare('delete from examen where id = ?').bind(row.id),
   ]);
@@ -159,6 +168,8 @@ app.put('/api/progreso/:id', async c => {
   ).bind(uid, row.id, JSON.stringify(junto), Date.now(), res).run();
   return c.json({ estado: junto });
 });
+
+registrarApuntes(app);
 
 app.all('/api/*', c => c.json({ error: 'No existe' }, 404));
 

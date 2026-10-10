@@ -53,3 +53,15 @@ test('validación de asignaturas y exámenes', () => {
   assert.equal(validarExamen({ nota_real: 11 }, true).ok, false);
   assert.equal(validarExamen({ nota_real: 7.25 }, true).datos.nota_real, 7.25);
 });
+
+test('cuotas de subida: tope global, por usuario, por archivo y por hora', async () => {
+  const { motivoRechazo, LIMITES } = await import('../worker/limites.js');
+  const base = { tipo: 'image/jpeg', bytes: 400_000, usadoUsuario: 0, usadoGlobal: 0, subidasUltimaHora: 0, archivosExamen: 0 };
+  assert.equal(motivoRechazo(base), null);
+  assert.match(motivoRechazo({ ...base, tipo: 'application/zip' }), /fotos/);
+  assert.match(motivoRechazo({ ...base, bytes: LIMITES.porArchivo + 1 }), /pesa demasiado/);
+  assert.match(motivoRechazo({ ...base, usadoGlobal: LIMITES.global - 100 }), /no se pueden subir más/);
+  assert.match(motivoRechazo({ ...base, usadoUsuario: LIMITES.porUsuario - 100 }), /límite/);
+  assert.match(motivoRechazo({ ...base, subidasUltimaHora: LIMITES.subidasPorHora }), /Espera/);
+  assert.ok(LIMITES.global < 10 * 1024 ** 3, 'el tope global queda por debajo de lo gratuito de R2');
+});

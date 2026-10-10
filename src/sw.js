@@ -27,6 +27,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.pathname.startsWith('/api/auth/')) return; // la sesión nunca se guarda
+  if (url.hostname === 'challenges.cloudflare.com') return; // el antibots, siempre directo
   const destino = url.pathname.startsWith('/api/') ? DATOS : CACHE;
   e.respondWith(
     // no-cache: pregunta siempre al servidor si hay versión nueva (GitHub Pages permite cachear 10 min)

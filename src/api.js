@@ -30,8 +30,17 @@ export const api = {
   crearExamen: datos => req('/api/examenes', { method: 'POST', body: JSON.stringify(datos) }),
   editarExamen: (id, datos) => req(`/api/examenes/${id}`, { method: 'PATCH', body: JSON.stringify(datos) }),
   borrarExamen: id => req(`/api/examenes/${id}`, { method: 'DELETE' }),
-  entrar: (email, password) => req('/api/auth/sign-in/email', { method: 'POST', body: JSON.stringify({ email, password, rememberMe: true }) }),
-  crearCuenta: (name, email, password) => req('/api/auth/sign-up/email', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
+  // captcha = respuesta del antibots (Turnstile), si está activado
+  entrar: (email, password, captcha) => req('/api/auth/sign-in/email', { method: 'POST', body: JSON.stringify({ email, password, rememberMe: true }), headers: captcha ? { 'x-captcha-response': captcha } : {} }),
+  crearCuenta: (name, email, password, captcha) => req('/api/auth/sign-up/email', { method: 'POST', body: JSON.stringify({ name, email, password }), headers: captcha ? { 'x-captcha-response': captcha } : {} }),
+  config: () => req('/api/config'),
+  documentos: id => req(`/api/examenes/${id}/documentos`),
+  borrarDocumento: doc => req(`/api/documentos/${doc}`, { method: 'DELETE' }),
+  enviarExamen: id => req(`/api/examenes/${id}/enviar`, { method: 'POST', body: '{}' }),
+  visto: id => req(`/api/examenes/${id}/visto`, { method: 'POST', body: '{}' }),
+  adminResumen: () => req('/api/admin/resumen'),
+  // El archivo va tal cual en el cuerpo (no en JSON)
+  subirDocumento: (id, blob, nombre) => req(`/api/examenes/${id}/documentos`, { method: 'POST', body: blob, headers: { 'Content-Type': blob.type, 'X-Nombre': encodeURIComponent(nombre) } }),
   salir: () => req('/api/auth/sign-out', { method: 'POST', body: '{}' }),
 };
 

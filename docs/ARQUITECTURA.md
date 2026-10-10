@@ -114,7 +114,7 @@ usuarios ─< asignaturas ─< examenes (fecha, formato, nivel, estado)
 | 0 ✅ | Desacoplar el motor de KAI del contenido (examen como dato). Migrar a Vite. Olvido con los días (FSRS), previsión para el día del examen en rango, los "?" de KAI. Calibración con estudiantes simulados (`tools/calibrar.mjs`). |
 | 1 ✅ | Cloudflare: login (registro abierto), BD, sincronización entre dispositivos, contenido privado en KV, `kai.e3develops.com`. (Se empieza limpio: sin migrar el progreso antiguo.) |
 | 2 ✅ | Biblioteca: Inicio con "te recomiendo…" (?), asignaturas (emoji y color), exámenes con fecha/formato/nivel, calendario con plan diario (?), nota real tras el examen. |
-| 3 | Fábrica semiautomática: subida, estados, avisos, publicación. Niveles y nota por formato. |
+| 3 ✅ | Fábrica semiautomática ([FABRICA.md](FABRICA.md)): subida a R2 con compresión, cuotas y tope global, antibots (Turnstile) en el registro, email al admin, panel de administración, OCR por franjas + transcripción, regla de oro en código, subrayado, publicación y aviso "¡listo!". |
 | 4 | Fábrica automática con la API. |
 | 5 | Pregunta de nota real y calibración. Extras. |
 
