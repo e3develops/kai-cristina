@@ -1,7 +1,7 @@
 import { kaiSVG, setKaiMood } from './kai.js';
 import { app, esc, render, modal, guardTaps, onRender, aviso } from './ui.js';
 import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4 } from './installart.js';
-import { CREADOR, VERSION } from './config.js';
+import { CREADOR, VERSION, MENSAJE_SECRETO_PARA } from './config.js';
 import { api, SinConexion, SinSesion, sesionGuardada, guardarSesion, olvidarSesion } from './api.js';
 import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, DIAG_LEN, SIM_LEN, MIN_FORECAST } from './engine/motor.js';
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
@@ -62,7 +62,7 @@ function homeMessage(r) {
   if (S.paused.diag) return `Tienes el <b>diagnóstico</b> a medias. Pulsa <b>Continuar</b> para seguir donde lo dejaste.`;
   if (S.paused.sim) return `Tienes un <b>simulacro</b> a medias. Pulsa <b>Continuar</b> para terminarlo cuando quieras.`;
   if (!S.diag) return `Lo primero es el <b>diagnóstico</b>: ${DIAG_LEN} preguntas para saber qué sabes ya y enfocar bien la práctica. ¡Sin presión!`;
-  if (r.ready) return `¡Estás <b>lista</b>${coma()}!&nbsp;🎉 Si quieres, sigue repasando un poquito para afianzar.`;
+  if (r.ready) return `¡Lo tienes${coma()}!&nbsp;🎉 Estás <b>a punto para el examen</b>. Si quieres, sigue repasando un poquito para afianzar.`;
   const lastSim = S.sims.at(-1);
   const simFailed = lastSim && E.simNota(lastSim) < E.nivel.notaSim && lastSim.n >= S.n - SIM_LEN && failedIds().length > 0;
   if (simFailed) return `En el simulacro sacaste un <b>${fmtNota(E.simNota(lastSim))}</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo&nbsp;💪`;
@@ -144,24 +144,24 @@ function onboardingSteps() {
   const temas = DATA.temas.map(t => `<li><span class="n">${t.emoji}</span><span>${esc(t.nombre)} <span class="muted small">(${DATA.preguntas.filter(p => p.tema === t.id).length} preguntas)</span></span></li>`).join('');
   return [
     { mood: 'wave happy', html: `<p>${hola()}&nbsp;👋</p><p>Soy <b>KAI</b>, tu robot de estudio.</p>` },
-    { mood: 'talk', html: `<p><b>${CREATOR}</b> me ha creado para ayudarte con tus estudios de enfermería.</p><p>Me ha pedido que te cuide mucho&nbsp;💙</p>` },
+    { mood: 'talk', html: `<p><b>${CREATOR}</b> me ha creado para ayudarte con tus estudios.</p><p>Me ha pedido que te cuide mucho&nbsp;💙</p>` },
     { mood: 'think', html: `<p>Me he leído tus apuntes de arriba abajo&nbsp;📚</p><ul class="steps-list">${temas}</ul><p>Las respuestas correctas y las citas salen <b>literalmente de tu libro</b>. No me invento nada.</p>` },
     { mood: 'talk', html: `<p>Así vamos a trabajar:</p><ul class="steps-list">
         <li><span class="n">1</span><span><b>Diagnóstico:</b> lo primero de todo. ${DIAG_LEN} preguntas para ver qué sabes y enfocar tu práctica.</span></li>
         <li><span class="n">2</span><span><b>Práctica inteligente:</b> te pregunto más lo que fallas, hasta que lo domines.</span></li>
-        <li><span class="n">3</span><span><b>Simulacro:</b> un examen de prueba para comprobar que estás lista.</span></li></ul>` },
+        <li><span class="n">3</span><span><b>Simulacro:</b> un examen de prueba para comprobar que lo llevas a punto.</span></li></ul>` },
     { mood: 'happy', html: `<p>Después de cada respuesta te enseño <b>la frase exacta del libro</b> y su página.</p><p>Así también aprendes de los fallos&nbsp;😉</p>` },
     { mood: 'think', html: `<p>Para que sepas cómo vas, en el inicio te enseño:</p><ul class="steps-list">
         <li><span class="n">✅</span><span><b>% dominado:</b> preguntas que tienes bien ahora mismo. Empieza en 0% y es exacto.</span></li>
         <li><span class="n">🔮</span><span><b>Nota estimada:</b> lo que calculo que sacarías hoy, sobre 10. Aparece a partir de ${MIN_FORECAST} respuestas.</span></li>
         <li><span class="n">📝</span><span><b>Simulacros:</b> tu nota en un examen de prueba. Es la pista más real.</span></li></ul>
         <p class="muted small">Las notas las calculo como en un examen ${describeFormato(E.formato)}.</p>` },
-    { mood: 'talk', html: `<p>Te diré <b>¡Estás lista!</b>&nbsp;🎉 cuando cumplas las 3 cosas:</p><ul class="steps-list">
+    { mood: 'talk', html: `<p>Te diré <b>¡A punto para el examen!</b>&nbsp;🎉 cuando cumplas las 3 cosas:</p><ul class="steps-list">
         <li><span class="n">1</span><span>Haber respondido al menos el <b>${pct(E.nivel.cobertura)}%</b> de cada tema (unas ${remainingWork().left + qStats().seen} preguntas).</span></li>
         <li><span class="n">2</span><span>Una nota estimada de <b>${fmtNota(E.nivel.nota)}</b> o más.</span></li>
         <li><span class="n">3</span><span>Sacar de media un <b>${fmtNota(E.nivel.notaSim)}</b> o más en ${E.nivel.sims > 1 ? `tus ${E.nivel.sims} últimos simulacros` : 'un simulacro'}.</span></li></ul>
         <p>Calculo que te llevará unas <b>${fmtTime(remainingWork().minutes)}</b> en total.</p>` },
-    { mood: 'happy', html: `<p>No hace falta hacerlo de golpe: <b>tu progreso se guarda solo</b> y puedes parar cuando quieras.</p><p>Y si no llegas a "lista", no te agobies: cada pregunta que repasas suma. Fíjate en tu <b>% dominado</b> y en tus <b>simulacros</b>&nbsp;💙</p>` },
+    { mood: 'happy', html: `<p>No hace falta hacerlo de golpe: <b>tu progreso se guarda solo</b> y puedes parar cuando quieras.</p><p>Y si no llegas a "a punto", no te agobies: cada pregunta que repasas suma. Fíjate en tu <b>% dominado</b> y en tus <b>simulacros</b>&nbsp;💙</p>` },
     S.diag
       ? { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¡Seguimos cuando quieras!&nbsp;💪</p>`, last: true }
       : { mood: 'wave happy', html: `<p>Tenemos <b>${total} preguntas</b> preparadas.</p><p>¿Empezamos con el diagnóstico?</p>`, last: true },
@@ -235,7 +235,7 @@ function showHome() {
         <div class="ready-card">
           <div class="ring" style="--p:${pct(all.pOk)}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${pct(all.pOk)}%</b><span>dominado</span></div>${why('dominado')}</div>
           <div>
-            <h3>${r.ready ? '¡Lista para el examen!&nbsp;🎉' : 'Preparación para el examen'}</h3>
+            <h3>${r.ready ? '¡A punto para el examen!&nbsp;🎉' : 'Preparación para el examen'}</h3>
             <p class="muted small" style="font-weight:700;margin-top:2px">${all.ok} de ${all.total} preguntas bien · ${all.seen}&nbsp;respondidas${hasForecast() ? ` · nota estimada${r.futuro ? ' para el examen' : ''}:&nbsp;<b>${fmtRango(r.rango)}</b>&nbsp;${why('rango')}` : ''}</p>
             <ul class="checks">${checks}</ul>
             <p class="muted small ready-note">Nivel ${E.nivel.nombre} (para un ${E.nivel.promete}) · notas sobre 10, ${describeFormato(E.formato)} ${why('nivel')}</p>
@@ -794,7 +794,7 @@ function showResults() {
   } else {
     title = score >= 0.8 ? '¡Rondón!&nbsp;🔥' : score >= 0.5 ? '¡Buena ronda!' : 'Ronda terminada';
     mood = score >= 0.5 ? 'happy' : 'talk';
-    msg = score >= 0.8 ? `Un ${pct(score)}% de aciertos. ¡Estás que te sales!` : score >= 0.5 ? 'Vas por buen camino. Los fallos te los volveré a preguntar.' : 'Tranquila: justo para esto estamos. Lo que has fallado volverá hasta que te salga solo.';
+    msg = score >= 0.8 ? `Un ${pct(score)}% de aciertos. ¡Estás que te sales!` : score >= 0.5 ? 'Vas por buen camino. Los fallos te los volveré a preguntar.' : 'Sin agobios: justo para esto estamos. Lo que has fallado volverá hasta que te salga solo.';
   }
 
   const diagSecs = sess.type === 'diag' ? (() => {
@@ -867,10 +867,10 @@ function showReady() {
     <div class="screen onb ready-screen">
       <div class="kai-big">${kaiSVG()}</div>
       <div class="bubble">
-        <p style="font-size:24px"><b>¡Estás lista${coma()}!</b>&nbsp;🎉</p>
+        <p style="font-size:24px"><b>¡A punto para el examen${coma()}!</b>&nbsp;🎉</p>
         <p>Calculo que sacarás <b>${fmtRango(r.rango)}</b> y en los simulacros vas con un <b>${fmtNota(r.lastSim)}</b>.</p>
-        <p>Ya puedes dejar de estudiar e ir al examen tranquila. ¡Vas a bordarlo!</p>
-        <p>${CREATOR} y yo estamos muy orgullosos de ti&nbsp;💙</p>
+        <p>Ya puedes dejar de estudiar e ir al examen con calma. ¡Vas a bordarlo!</p>
+        <p>Estoy muy orgulloso de ti&nbsp;💙</p>
       </div>
       <div class="btn-col"><button class="btn" id="ok">¡Gracias, KAI!&nbsp;🤖</button></div>
     </div>`, 'celebrate');
@@ -989,12 +989,20 @@ async function arrancar() {
   }
   NAME = (sesion.user.nombre || '').split(' ')[0];
   guardarSesion(sesion);
+  activarMensajeSecreto(sesion.user.email);
   configurarBiblioteca({
     abrirExamen, nombre: () => NAME, menuCuenta,
     iniciales: () => (sesion.user.nombre || sesion.user.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase(),
     entrar: () => showLogin(),
   });
   try { await showInicio(); } catch (e) { if (e instanceof SinSesion) showLogin(); }
+}
+
+async function activarMensajeSecreto(email) {
+  try {
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(email || '').trim().toLowerCase()));
+    window.kaiSecreto = MENSAJE_SECRETO_PARA.includes([...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join(''));
+  } catch (e) { window.kaiSecreto = false; }
 }
 
 // Abre el estudio de un examen (la KAI de siempre): datos, progreso del móvil + de la cuenta, motor

@@ -160,7 +160,7 @@ function tarjetaExamen(e, { conAsignatura = true } = {}) {
   const chip = dias == null ? '' : dias < 0 ? `<button class="pill warn" data-nota="${e.id}">¿qué nota sacaste?</button>` : `<span class="pill ${dias <= 7 ? 'warn' : ''}">${fmtDias(dias)}</span>`;
   const prev = r && r.respuestas >= 20 ? `nota prevista ${fmtRango(r.rango)} ${why('b-rango', e.id)}` : r && r.respuestas > 0 ? 'calculando tu nota…' : 'sin empezar';
   return `<div class="card lib-ex" data-examen="${e.id}"><div class="lib-ex-top"><b>${nombre}</b>${chip}</div>
-    <div class="muted small">${nivelDe(e.nivel).nombre} · ${prev}${r?.listo ? ' · <b class="ok-txt">¡lista!</b>' : ''}</div>
+    <div class="muted small">${nivelDe(e.nivel).nombre} · ${prev}${r?.listo ? ' · <b class="ok-txt">¡a punto!</b>' : ''}</div>
     <div class="bar"><i style="width:${pct(r?.dominado)}%"></i></div></div>`;
 }
 
@@ -411,7 +411,7 @@ export function showCalendario(delta = null) {
       ${delMes.length ? delMes.map(e => {
         const a = asignaturaDe(e); const p = planDe(e); const dias = diasHasta(e.fecha);
         const plan = e.notaReal != null ? `Sacaste un ${fmtNota(e.notaReal)}` : dias < 0 ? 'Ya pasó' : e.estado !== 'listo' ? 'Aún sin apuntes preparados'
-          : p.listo ? '¡Lista! Un repaso corto de vez en cuando' : `Plan: ${p.minutosDia} min al día para llegar a ${nivelDe(e.nivel).nombre} ${why('b-plan', e.id)}`;
+          : p.listo ? '¡A punto! Un repaso corto de vez en cuando' : `Plan: ${p.minutosDia} min al día para llegar a ${nivelDe(e.nivel).nombre} ${why('b-plan', e.id)}`;
         return `<div class="card lib-ex" data-examen="${e.id}"><div class="lib-ex-top"><b>${fmtFecha(e.fecha, { day: 'numeric' })} · ${a ? `${esc(a.nombre)} · ` : ''}${esc(e.nombre)}</b><span class="muted small">${dias >= 0 ? fmtDias(dias) : ''}</span></div><div class="muted small">${plan}</div></div>`;
       }).join('') : '<p class="muted">No hay exámenes este mes.</p>'}
       ${tabbar('calendario')}
@@ -456,7 +456,7 @@ export function explicarBiblioteca(key, arg) {
     };
     case 'b-niveles': return {
       titulo: 'Fácil, Medio y Pro',
-      html: `<ul class="why-list">${Object.values(NIVELES).map(n => `<li><b>${n.nombre}</b> (para un ${n.promete}): te doy por lista con una nota estimada de ${fmtNota(n.nota)}, el ${pct(n.cobertura)} % del temario visto y ${n.sims > 1 ? `${n.sims} simulacros` : 'un simulacro'} de ${fmtNota(n.notaSim)} o más.</li>`).join('')}</ul>
+      html: `<ul class="why-list">${Object.values(NIVELES).map(n => `<li><b>${n.nombre}</b> (para un ${n.promete}): considero que estás a punto con una nota estimada de ${fmtNota(n.nota)}, el ${pct(n.cobertura)} % del temario visto y ${n.sims > 1 ? `${n.sims} simulacros` : 'un simulacro'} de ${fmtNota(n.notaSim)} o más.</li>`).join('')}</ul>
         <p class="muted small">Puedes subir de nivel cuando quieras sin perder nada de lo que llevas.</p>`,
     };
     default: return null;

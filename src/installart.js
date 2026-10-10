@@ -94,7 +94,7 @@ export const art2 = phone(`
   <rect x="0" y="52" width="200" height="260" rx="16" fill="#F2F2F7"/>
   <rect x="88" y="58" width="24" height="4" rx="2" fill="#C7C7CC"/>
   ${kaiIcon(14, 70, 26)}
-  <text x="48" y="81" ${F} font-size="10" font-weight="700" fill="#1C1C1E">KAI · Estudia con Cristina</text>
+  <text x="48" y="81" ${F} font-size="10" font-weight="700" fill="#1C1C1E">KAI</text>
   <text x="48" y="93" ${F} font-size="8.5" fill="#8E8E93">e3develops.github.io</text>
   <g>
     <circle cx="34" cy="122" r="15" fill="#34C759"/><circle cx="76" cy="122" r="15" fill="#0A84FF"/>
@@ -119,7 +119,7 @@ export const artMore = phone(`
   <rect x="0" y="52" width="200" height="260" rx="16" fill="#F2F2F7"/>
   <rect x="88" y="58" width="24" height="4" rx="2" fill="#C7C7CC"/>
   ${kaiIcon(14, 70, 26)}
-  <text x="48" y="81" ${F} font-size="10" font-weight="700" fill="#1C1C1E">KAI · Estudia con Cristina</text>
+  <text x="48" y="81" ${F} font-size="10" font-weight="700" fill="#1C1C1E">KAI</text>
   <text x="48" y="93" ${F} font-size="8.5" fill="#8E8E93">e3develops.github.io</text>
   <g>
     <circle cx="34" cy="126" r="15" fill="#34C759"/><circle cx="76" cy="126" r="15" fill="#0A84FF"/>

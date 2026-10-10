@@ -34,7 +34,7 @@ export function explicacion(key, { E, r, arg, item, nombre }) {
     case 'dominado': return {
       titulo: '¿Qué es el % dominado?',
       html: `<p>Las preguntas que tienes <b>bien ahora mismo</b>: la última vez que te salieron, las acertaste.</p>
-        <p>Es un dato exacto (no una estimación) y empieza en 0 %. No hace falta llegar al 100 %: para estar lista miro tu nota estimada y tus simulacros.</p>`,
+        <p>Es un dato exacto (no una estimación) y empieza en 0 %. No hace falta llegar al 100 %: para saber si estás a punto miro tu nota estimada y tus simulacros.</p>`,
     };
     case 'nota': return {
       titulo: `¿Por qué hace falta un ${fmtNota(N.nota)}?`,

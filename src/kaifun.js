@@ -2,7 +2,7 @@
 // rachas de aciertos y el mensaje secreto de Kike (mantener pulsado a KAI).
 import { kaiSVG } from './kai.js';
 
-const PHRASES = ['¡Uy! 😳', '¡Cosquillas!', '¡Estoy aquí contigo! 💙', '¿Otra rondita?', '¡Tú puedes!', 'Beep boop 🤖', '¡Me encanta estudiar contigo!', '¡Hola, Cristina! 👋'];
+const PHRASES = ['¡Uy! 😳', '¡Cosquillas!', '¡Estoy aquí contigo! 💙', '¿Otra rondita?', '¡Tú puedes!', 'Beep boop 🤖', '¡Me encanta estudiar contigo!', '¡Hola! 👋'];
 const IDLE_MS = 60 * 1000;
 const isNight = () => { const h = new Date().getHours(); return h >= 23 || h < 6; };
 const visible = svg => { const r = svg.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < innerHeight; };
@@ -105,7 +105,7 @@ document.addEventListener('pointerdown', e => {
     taps = 0;
     pulse(svg, 'love', 2600);
     sparkle(svg, ['💕', '💖', '❤️'], 7);
-    setTimeout(secret, 700);
+    if (window.kaiSecreto) setTimeout(secret, 700); // solo en la cuenta de Cris (ver config.js)
   }, 600);
 }, true);
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => document.addEventListener(ev, () => clearTimeout(pressTimer), true));

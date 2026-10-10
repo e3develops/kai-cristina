@@ -57,7 +57,7 @@ export function recomendar(examenes, ahora = Date.now()) {
   const motivos = [];
   motivos.push(p.dias == null ? 'Aún no tiene fecha, así que voy con calma.' : `Es <b>${fmtDias(p.dias)}</b>.`);
   if (!p.empezado) motivos.push('Aún no lo has empezado: lo primero es el diagnóstico, para saber de dónde partimos.');
-  else if (p.listo) motivos.push('Ya estás lista 🎉 Un repaso corto para que no se te olvide antes del examen.');
+  else if (p.listo) motivos.push('Ya lo tienes a punto 🎉 Un repaso corto para que no se te olvide antes del examen.');
   else {
     motivos.push(`Calculo que ahora sacarías <b>${fmtRango(r.rango)}</b> y el objetivo del nivel ${N.nombre} es un <b>${fmtNota(N.nota)}</b>.`);
     motivos.push(`Te quedan unas <b>${fmtTime(p.minutos)}</b> de estudio${p.dias != null ? `: con <b>${p.minutosDia} min al día</b> llegas` : ''}.`);
