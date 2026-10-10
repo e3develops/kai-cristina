@@ -170,6 +170,19 @@ export function createEngine({ examen, data, state, save, now = () => Date.now()
   const hasForecast = () => S.n >= MIN_FORECAST;
   const simNota = sim => notaDeAciertos(sim.score, formato);
 
+  // Margen de la previsión: más ancho con poca información, e inclinado hacia abajo porque la
+  // calibración (tools/calibrar.mjs) muestra que KAI tiende a pasarse más que a quedarse corto.
+  function margen(diasHastaExamen) {
+    const sims = S.sims.length;
+    const m = { abajo: sims >= 2 ? 0.9 : sims === 1 ? 1.0 : 1.1, arriba: 0.5 };
+    m.abajo += 0.3 * Math.min(diasHastaExamen, 8);      // cuantos más días faltan, más puede olvidar
+    if (S.n < 150) { m.abajo += 0.5; m.arriba += 0.5; } // aún sé poco de cómo va
+    const escala = 1 + formato.penalizacion;            // si los fallos restan, la nota se mueve más
+    return { abajo: m.abajo * escala, arriba: m.arriba * escala };
+  }
+  const medio = x => Math.min(10, Math.max(0, Math.round(x * 2) / 2));
+  const rango = (n, m) => ({ min: medio(n - m.abajo), max: Math.max(medio(n - m.abajo), medio(n + m.arriba)) });
+
   // "¿Estás lista?" se mide para el día del examen (contando lo que se olvidará hasta entonces)
   function readiness() {
     const at = momentoExamen();
@@ -183,11 +196,17 @@ export function createEngine({ examen, data, state, save, now = () => Date.now()
     const lastSim = lastN.length ? lastN.reduce((a, x) => a + simNota(x), 0) / lastN.length : null;
     const work = remainingWork();
     const checks = [
-      { ok: hasForecast() && notaAll >= N.nota, label: `Nota estimada${futuro ? ' para el día del examen' : ''} de ${fmtNota(N.nota)} o más`, info: !hasForecast() ? `se calcula a partir de ${MIN_FORECAST} respuestas (llevas ${S.n})` : futuro ? `ese día: ${fmtNota(notaAll)} · hoy: ${fmtNota(notaHoy)}` : `ahora: ${fmtNota(notaAll)}` },
-      { ok: hasForecast() && temas.every(t => t.nota >= N.notaTema && t.cov >= N.cobertura), label: `Responder al menos el ${pct(N.cobertura)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id, nivel: true }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') + (work.left ? ` · faltan ${work.left} (≈ ${fmtTime(work.minutes)})` : '') },
-      { ok: lastSim !== null && lastN.length >= N.sims && lastSim >= N.notaSim, label: `Simulacros con ${fmtNota(N.notaSim)} o más`, info: lastSim === null ? 'sin hacer' : lastN.length > 1 ? `media de los ${lastN.length} últimos: ${fmtNota(lastSim)}` : `último: ${fmtNota(lastSim)}${N.sims > 1 ? ` (hacen falta ${N.sims})` : ''}` },
+      { id: 'nota', ok: hasForecast() && notaAll >= N.nota, label: `Nota estimada${futuro ? ' para el día del examen' : ''} de ${fmtNota(N.nota)} o más`, info: !hasForecast() ? `se calcula a partir de ${MIN_FORECAST} respuestas (llevas ${S.n})` : futuro ? `ese día: ${fmtNota(notaAll)} · hoy: ${fmtNota(notaHoy)}` : `ahora: ${fmtNota(notaAll)}` },
+      { id: 'cobertura', ok: hasForecast() && temas.every(t => t.nota >= N.notaTema && t.cov >= N.cobertura), label: `Responder al menos el ${pct(N.cobertura)}% de cada tema`, info: temas.map(t => { const q = qStats({ tema: t.id, nivel: true }); return `${t.corto}: ${q.seen}/${q.total} (${pct(q.pSeen)}%)`; }).join(' · ') + (work.left ? ` · faltan ${work.left} (≈ ${fmtTime(work.minutes)})` : '') },
+      { id: 'sims', ok: lastSim !== null && lastN.length >= N.sims && lastSim >= N.notaSim, label: `Simulacros con ${fmtNota(N.notaSim)} o más`, info: lastSim === null ? 'sin hacer' : lastN.length > 1 ? `media de los ${lastN.length} últimos: ${fmtNota(lastSim)}` : `último: ${fmtNota(lastSim)}${N.sims > 1 ? ` (hacen falta ${N.sims})` : ''}` },
     ];
-    return { all, nota: notaAll, notaHoy, futuro, fechaExamen, temas, lastSim, checks, ready: checks.every(c => c.ok) };
+    const dias = futuro ? (at - now()) / DAY : 0;
+    const m = margen(dias);
+    return {
+      all, nota: notaAll, notaHoy, futuro, fechaExamen, dias, margen: m,
+      rango: rango(notaAll, m), rangoHoy: rango(notaHoy, margen(0)),
+      temas, lastSim, checks, ready: checks.every(c => c.ok),
+    };
   }
 
   function record(qid, ok) {
@@ -229,25 +248,28 @@ export function createEngine({ examen, data, state, save, now = () => Date.now()
     const due = id => stat(id) && (stat(id).due <= n || (stat(id).lastOk && recuerdo(id, t) < 0.85));
     const byDue = (a, b) => stat(a).due - stat(b).due;
 
+    const elige = (id, motivo) => { lastPick = { id, motivo, recuerdo: stat(id) ? recuerdo(id, t) : null }; return id; };
+
     // Intercalar: tras un repaso, si queda temario sin ver, toca una nueva
     const fresh = cands.filter(id => !stat(id));
-    if (preferNew && fresh.length) return pickWeakSection(fresh);
+    if (preferNew && fresh.length) return elige(pickWeakSection(fresh), 'nueva');
 
     // 1) Fallos que ya tocan (siempre primero)
     const failed = cands.filter(id => due(id) && !stat(id).lastOk).sort((a, b) => stat(b).last - stat(a).last);
-    if (failed.length) return failed[0];
+    if (failed.length) return elige(failed[0], 'fallo');
     // 2) Fallos recuperados que hay que confirmar
     const confirming = cands.filter(id => due(id) && stat(id).ko > 0 && stat(id).streak < MASTERY_STREAK).sort(byDue);
-    if (confirming.length) return confirming[0];
+    if (confirming.length) return elige(confirming[0], 'confirmar');
     // 3) Contenido nuevo, priorizando los apartados más flojos (con algún repaso suelto)
     const unseen = cands.filter(id => !stat(id));
     const reviews = cands.filter(due).sort((a, b) => recuerdo(a, t) - recuerdo(b, t)); // lo más olvidado primero
-    if (unseen.length && !(reviews.length && Math.random() < 0.1)) return pickWeakSection(unseen);
+    if (unseen.length && !(reviews.length && Math.random() < 0.1)) return elige(pickWeakSection(unseen), 'nueva');
     // 4) Repasos pendientes
-    if (reviews.length) return reviews[0];
+    if (reviews.length) return elige(reviews[0], recuerdo(reviews[0], t) < 0.85 ? 'olvido' : 'repaso');
     // 5) Todo visto y nada pendiente: lo que antes toque
-    return cands.filter(id => stat(id)).sort(byDue)[0] || cands[0];
+    return elige(cands.filter(id => stat(id)).sort(byDue)[0] || cands[0], 'todo-visto');
   }
+  let lastPick = null; // por qué se eligió el último concepto (para el "¿por qué esta pregunta?")
   function pickWeakSection(ids) {
     const bySec = {};
     for (const id of ids) (bySec[CONCEPTS[id].sec] ||= []).push(id);
@@ -288,6 +310,8 @@ export function createEngine({ examen, data, state, save, now = () => Date.now()
   return {
     data, Q, formato, nivel: N,
     get state() { return S; },
+    get lastPick() { return lastPick; },
+    sectionWeakness: sec => 1 - priorAcc(sec),
     reset(newState) { S = newState; save(); },
     conceptIds, seenCount, failedIds, sections, mastered, estimate, nota, qStats, coverage,
     remainingWork, hasForecast, simNota, readiness, record, pickConcept, pickQuestion, buildDiag, buildSim,

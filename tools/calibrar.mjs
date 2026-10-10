@@ -72,6 +72,10 @@ function runStudent(base, plan) {
   const pool = E.conceptIds();
   let recent = [], prevNew = false;
   const answer = qid => { E.record(qid, st.answer(E.Q[qid].concepto, clock)); clock += SEG_RESPUESTA * 1000; };
+  const tExamen = new Date(`${fecha}T09:00:00`).getTime();
+  const realSiPara = () => notaDeProbabilidades(pool.map(cid => st.pAt(cid, tExamen)), f); // si dejara de estudiar ya
+  const checks = []; // ¿la nota real cae dentro del rango que da KAI?
+  const check = () => { if (!E.hasForecast()) return; const r = E.readiness(); const real = realSiPara(); checks.push({ sims: state.sims.length, dentro: real >= r.rango.min - 1e-9 && real <= r.rango.max + 1e-9, debajo: real < r.rango.min, ancho: r.rango.max - r.rango.min }); };
 
   plan.dias.forEach((min, d) => {
     clock = T0 + d * DAY;
@@ -82,31 +86,44 @@ function runStudent(base, plan) {
       prevNew = !state.c[cid];
       answer(E.pickQuestion(cid));
       recent = [cid, ...recent].slice(0, 4);
+      if ((state.n % 150) === 0) check();
     }
+    check();
     // Último día de estudio: 2 simulacros, como haría quien quiere comprobar si está lista
     if (d === plan.dias.length - 1) {
       for (let k = 0; k < 2; k++) {
         let okN = 0; const qs = E.buildSim();
         for (const qid of qs) { const ok = st.answer(E.Q[qid].concepto, clock); if (ok) okN++; E.record(qid, ok); clock += SEG_RESPUESTA * 1000; }
         state.sims.push({ date: clock, score: okN / qs.length, n: state.n });
+        check();
       }
     }
   });
   const r = E.readiness(); // previsión para el día del examen
-  const tExamen = new Date(`${fecha}T09:00:00`).getTime();
-  const real = notaDeProbabilidades(pool.map(cid => st.pAt(cid, tExamen)), f);
-  return { est: r.nota, hoy: r.notaHoy, real, ready: r.ready, n: state.n };
+  const real = realSiPara();
+  return { est: r.nota, hoy: r.notaHoy, real, ready: r.ready, n: state.n, checks };
 }
 
+const todos = [];
 console.log(`Formato: ${f.opciones} opciones, penalización ${f.penalizacion.toFixed(2)} · ${N_EST} estudiantes por perfil`);
 for (const [nombre, plan] of Object.entries(PLANES)) {
   console.log(`\n=== ${nombre} ===`);
   for (const [perfil, base] of [['floja', 0.3], ['media', 0.5], ['buena', 0.7]]) {
     const rs = Array.from({ length: N_EST }, () => runStudent(base, plan));
+    rs.forEach(r => todos.push(...r.checks));
     const avg = k => rs.reduce((a, r) => a + r[k], 0) / rs.length;
     const bias = rs.reduce((a, r) => a + r.est - r.real, 0) / rs.length;
     const lista = rs.filter(r => r.ready);
     console.log(`${perfil.padEnd(6)} hoy ${fmtNota(avg('hoy')).padStart(4)} · día del examen: estimada ${fmtNota(avg('est')).padStart(4)} / real ${fmtNota(avg('real')).padStart(4)} (sesgo ${bias >= 0 ? '+' : ''}${bias.toFixed(2)})` +
       ` · "lista": ${lista.length}/${rs.length}${lista.length ? ` (real de esas: ${fmtNota(lista.reduce((a, r) => a + r.real, 0) / lista.length)})` : ''}`);
   }
+}
+
+// Rango: ¿cuántas veces cae la nota real dentro del rango que enseña KAI?
+console.log('\n=== Rango ===');
+for (const [nombre, sel] of [['sin simulacros', c => c.sims === 0], ['con 1 simulacro', c => c.sims === 1], ['con 2+', c => c.sims >= 2]]) {
+  const cs = todos.filter(sel);
+  if (!cs.length) continue;
+  const pc = k => Math.round(100 * cs.filter(c => c[k]).length / cs.length);
+  console.log(`${nombre.padEnd(16)} dentro: ${pc('dentro')}% · por debajo: ${pc('debajo')}% · ancho medio: ${(cs.reduce((a, c) => a + c.ancho, 0) / cs.length).toFixed(1)} (${cs.length} previsiones)`);
 }

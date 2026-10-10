@@ -4,6 +4,7 @@ import { PERFIL, VERSION, EXAMEN_URL } from './config.js';
 import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, DIAG_LEN, SIM_LEN, MIN_FORECAST } from './engine/motor.js';
 import { freshState, loadState, saveState } from './engine/estado.js';
 import { fmtNota, describeFormato } from './engine/nota.js';
+import { why, explicacion, fmtRango } from './porque.js';
 
 // ------------------------------------------------------------------
 // Configuración
@@ -60,11 +61,11 @@ function homeMessage(r) {
   const simFailed = lastSim && E.simNota(lastSim) < E.nivel.notaSim && lastSim.n >= S.n - SIM_LEN && failedIds().length > 0;
   if (simFailed) return `En el simulacro sacaste un <b>${fmtNota(E.simNota(lastSim))}</b>. Repasa los fallos y sigue estudiando un poco; luego vuelve a intentarlo&nbsp;💪`;
   const covered = r.temas.every(t => t.cov >= E.nivel.cobertura);
-  if (r.nota >= E.nivel.nota && covered && r.lastSim === null) return `¡Tu nota estimada es de un <b>${fmtNota(r.nota)}</b>! Es el momento de hacer un <b>simulacro de examen</b>.`;
-  if (r.nota >= E.nivel.nota && !covered) return `Lo que has visto lo llevas genial (nota estimada: <b>${fmtNota(r.nota)}</b>). Sigue estudiando para cubrir más temario.`;
+  if (r.nota >= E.nivel.nota && covered && r.lastSim === null) return `¡Calculo que sacarías <b>${fmtRango(r.rango)}</b>! Es el momento de hacer un <b>simulacro de examen</b>: es la pista más real.`;
+  if (r.nota >= E.nivel.nota && !covered) return `Lo que has visto lo llevas genial (nota estimada: <b>${fmtRango(r.rango)}</b>). Sigue estudiando para cubrir más temario.`;
   if (failed >= 8) return `Tienes <b>${failed}</b> preguntas falladas pendientes. Si sigues estudiando te las iré repitiendo hasta que salgan solas.`;
   if (!hasForecast() || r.nota < 1) return `Vamos poco a poco. Pulsa <b>Seguir estudiando</b> y yo elijo las preguntas que más te convienen.`;
-  return rand([`¡Vas muy bien! Si el examen fuera ahora, calculo que sacarías un <b>${fmtNota(r.nota)}</b>.`, `Cada pregunta cuenta. ¡Sigue así, ${NAME}!&nbsp;💪`]);
+  return rand([`¡Vas muy bien! Si el examen fuera ahora, calculo que sacarías <b>${fmtRango(r.rango)}</b>.`, `Cada pregunta cuenta. ¡Sigue así, ${NAME}!&nbsp;💪`]);
 }
 
 // ------------------------------------------------------------------
@@ -203,7 +204,9 @@ function showHome() {
   const all = qStats();
   const lock = S.diag ? '' : 'locked';
   const failed = failedIds().length;
-  const checks = r.checks.map(c => `<li class="${c.ok ? 'done' : ''}"><span class="ck">${c.ok ? '✓' : ''}</span><span>${c.label}<br><span class="muted small">${c.info}</span></span></li>`).join('');
+  const checkInfo = c => c.id !== 'nota' || !hasForecast() ? c.info
+    : r.futuro ? `ese día: ${fmtRango(r.rango)} · hoy: ${fmtRango(r.rangoHoy)} ${why('olvido')}` : `ahora: ${fmtRango(r.rango)}`;
+  const checks = r.checks.map(c => `<li class="${c.ok ? 'done' : ''}"><span class="ck">${c.ok ? '✓' : ''}</span><span>${c.label} ${why(c.id)}<br><span class="muted small">${checkInfo(c)}</span></span></li>`).join('');
   const temas = r.temas.map(t => {
     const qs = qStats({ tema: t.id });
     const total = conceptIds({ tema: t.id }).length;
@@ -236,12 +239,12 @@ function showHome() {
 
       <div class="card">
         <div class="ready-card">
-          <div class="ring" style="--p:${pct(all.pOk)}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${pct(all.pOk)}%</b><span>dominado</span></div></div>
+          <div class="ring" style="--p:${pct(all.pOk)}; --c:${r.ready ? 'var(--ok)' : 'var(--primary)'}"><div class="val"><b>${pct(all.pOk)}%</b><span>dominado</span></div>${why('dominado')}</div>
           <div>
             <h3>${r.ready ? '¡Lista para el examen!&nbsp;🎉' : 'Preparación para el examen'}</h3>
-            <p class="muted small" style="font-weight:700;margin-top:2px">${all.ok} de ${all.total} preguntas bien · ${all.seen}&nbsp;respondidas${hasForecast() ? ` · nota estimada${r.futuro ? ' para el examen' : ''}:&nbsp;<b>${fmtNota(r.nota)}</b>` : ''}</p>
+            <p class="muted small" style="font-weight:700;margin-top:2px">${all.ok} de ${all.total} preguntas bien · ${all.seen}&nbsp;respondidas${hasForecast() ? ` · nota estimada${r.futuro ? ' para el examen' : ''}:&nbsp;<b>${fmtRango(r.rango)}</b>&nbsp;${why('rango')}` : ''}</p>
             <ul class="checks">${checks}</ul>
-            <p class="muted small ready-note">Nivel ${E.nivel.nombre} (para un ${E.nivel.promete}) · notas sobre 10, ${describeFormato(E.formato)}</p>
+            <p class="muted small ready-note">Nivel ${E.nivel.nombre} (para un ${E.nivel.promete}) · notas sobre 10, ${describeFormato(E.formato)} ${why('nivel')}</p>
           </div>
         </div>
       </div>
@@ -289,6 +292,28 @@ function modal(html, bind) {
   guardTaps(bg);
   bind(bg, () => bg.remove());
 }
+
+// Los "?": KAI explica el porqué de cada dato (textos en porque.js)
+function showWhy(key, arg) {
+  const item = key === 'pregunta' ? sess?.items[sess.i]?.por : null;
+  const { titulo, html } = explicacion(key, { E, r: readiness(), arg, item, nombre: NAME });
+  if (!titulo) return;
+  modal(`
+    <div class="kai-row"><div class="kai-wrap">${kaiSVG()}</div><div class="bubble"><b>${titulo}</b></div></div>
+    <div class="why-body">${html}</div>
+    <button class="btn" data-a="close">¡Entendido!</button>`, (el, close) => {
+    setKaiMood(el, 'talk');
+    el.querySelector('[data-a=close]').onclick = close;
+  });
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-why]');
+  if (!b || !E) return;
+  e.preventDefault();
+  e.stopPropagation();
+  showWhy(b.dataset.why, b.dataset.arg);
+}, true);
+
 function showMenu() {
   modal(`
     <h2>Opciones</h2>
@@ -478,7 +503,8 @@ function nextQuestion() {
   const q = Q[qid];
   const prev = S.c[q.concepto];
   sess.recent = [q.concepto, ...sess.recent].slice(0, Math.min(4, Math.max(1, sess.pool.length - 1)));
-  sess.items[sess.i] = { qid, order: shuffle([0, 1, 2, 3]), chosen: null, ok: null, wasNew: !prev, wasFailed: prev?.lastOk === false };
+  const motivo = sess.fixed ? (sess.type === 'fallos' ? { motivo: 'fallo' } : null) : { motivo: E.lastPick?.motivo, recuerdo: E.lastPick?.recuerdo };
+  sess.items[sess.i] = { qid, order: shuffle([0, 1, 2, 3]), chosen: null, ok: null, wasNew: !prev, wasFailed: prev?.lastOk === false, ...(motivo ? { por: motivo } : {}) };
   persistSess();
   renderQuestion();
 }
@@ -492,6 +518,7 @@ function renderQuestion() {
     `<span class="chip">${tema?.emoji || ''} ${esc(q.seccion)}</span>`,
     sess.type !== 'sim' && it.wasFailed ? `<span class="chip warn">🔁 La fallaste antes</span>` : '',
     sess.type !== 'sim' && it.wasNew && S.diag ? `<span class="chip new">✨ Nueva</span>` : '',
+    it.por ? `<button class="chip why-chip" data-why="pregunta">🤔 ¿Por qué esta?</button>` : '',
   ].join('');
   const opts = it.order.map((oi, k) => `
     <button class="opt" data-k="${k}"><span class="letter">${'ABCD'[k]}</span><span>${esc(q.opciones[oi])}</span></button>`).join('');
@@ -852,7 +879,7 @@ function showReady() {
       <div class="kai-big">${kaiSVG()}</div>
       <div class="bubble">
         <p style="font-size:24px"><b>¡Estás lista, ${NAME}!</b>&nbsp;🎉</p>
-        <p>Tu nota estimada es de un <b>${fmtNota(r.nota)}</b> y en los simulacros vas con un <b>${fmtNota(r.lastSim)}</b>.</p>
+        <p>Calculo que sacarás <b>${fmtRango(r.rango)}</b> y en los simulacros vas con un <b>${fmtNota(r.lastSim)}</b>.</p>
         <p>Ya puedes dejar de estudiar e ir al examen tranquila. ¡Vas a bordarlo!</p>
         <p>${CREATOR} y yo estamos muy orgullosos de ti&nbsp;💙</p>
       </div>
