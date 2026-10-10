@@ -306,7 +306,7 @@ function showMenu() {
   modal(`
     <h2>${esc(EXAMEN.nombre)}</h2>
     <button class="btn secondary" data-a="editar">✏️ Fecha, formato y nivel</button>
-    <button class="btn secondary" data-a="tuto">👋 Ver la presentación de KAI</button>
+    <button class="btn secondary" data-a="tuto">📖 Cómo funciona este examen</button>
     <button class="btn secondary" data-a="reset">🗑️ Reiniciar mi progreso en este examen</button>
     <button class="btn ghost" data-a="close">Cerrar</button>`, (el, close) => {
     el.querySelector('[data-a=tuto]').onclick = () => { close(); showOnboarding(0); };
@@ -1029,7 +1029,50 @@ async function arrancar() {
     iniciales: () => (sesion.user.nombre || sesion.user.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase(),
     entrar: () => showLogin(),
   });
+  let prefs = null;
+  try { prefs = await api.preferencias(); } catch (e) { /* sin conexión: no se insiste */ }
+  if (prefs && !prefs.presentacion) return showPresentacion(0);
   try { await showInicio(); } catch (e) { if (e instanceof SinSesion) showLogin(); }
+}
+
+// ---------- Presentación de KAI (una vez por cuenta, al entrar por primera vez) ----------
+function pasosPresentacion() {
+  return [
+    { mood: 'wave happy', html: `<p>${hola()}&nbsp;👋</p><p>Soy <b>KAI</b>, tu compañero de estudio. ${CREATOR} me ha creado para ayudarte a preparar tus exámenes&nbsp;💙</p>` },
+    { mood: 'talk', html: `<p>Así funciono:</p><ul class="steps-list">
+        <li><span class="n">1</span><span>Creas tus <b>asignaturas</b> y sus <b>exámenes</b>, con la fecha.</span></li>
+        <li><span class="n">2</span><span>Me subes tus <b>apuntes</b> (fotos o PDF) y yo preparo las preguntas.</span></li>
+        <li><span class="n">3</span><span>Estudiamos juntos hasta que estés <b>a punto</b>.</span></li></ul>` },
+    { mood: 'think', html: `<p>Mis preguntas salen <b>literalmente de tus apuntes</b>: no me invento nada.</p><p>Después de cada respuesta te enseño la frase exacta y te llevo a la página donde está&nbsp;📖</p>` },
+    { mood: 'talk', html: `<p>En cada examen:</p><ul class="steps-list">
+        <li><span class="n">🩺</span><span><b>Diagnóstico</b> para ver qué sabes ya.</span></li>
+        <li><span class="n">🎯</span><span><b>Práctica inteligente</b>: te pregunto más lo que fallas y te repaso lo que se te está olvidando.</span></li>
+        <li><span class="n">📝</span><span><b>Simulacros</b> como el examen de verdad.</span></li></ul>` },
+    { mood: 'happy', html: `<p>Cada día te diré <b>qué te toca estudiar</b> y cuánto tiempo, según tus fechas.</p><p>Y si algo te hace pensar "¿y esto por qué?", toca el <b>?</b> y te lo explico&nbsp;😉</p>`, last: true },
+  ];
+}
+function showPresentacion(i = 0) {
+  const pasos = pasosPresentacion();
+  const st = pasos[i];
+  const dots = pasos.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('');
+  render(`
+    <div class="screen onb">
+      <div class="kai-big">${kaiSVG()}</div>
+      <div class="bubble">${st.html}</div>
+      <div class="dots">${dots}</div>
+      <div class="btn-col">
+        ${st.last ? '<button class="btn" id="fin">¡Empezamos!&nbsp;🚀</button>' : '<button class="btn" id="next">Siguiente</button>'}
+        ${i > 0 ? '<button class="btn ghost" id="prev">Atrás</button>' : '<button class="btn ghost" id="fin2">Saltar presentación</button>'}
+      </div>
+    </div>`, st.mood);
+  const terminar = async () => {
+    api.guardarPreferencias({ presentacion: true }).catch(() => {});
+    try { await showInicio(); } catch (e) { if (e instanceof SinSesion) showLogin(); }
+  };
+  app.querySelector('#next')?.addEventListener('click', () => showPresentacion(i + 1));
+  app.querySelector('#prev')?.addEventListener('click', () => showPresentacion(i - 1));
+  app.querySelector('#fin')?.addEventListener('click', terminar);
+  app.querySelector('#fin2')?.addEventListener('click', terminar);
 }
 
 // Abre el estudio de un examen (la KAI de siempre): datos, progreso del móvil + de la cuenta, motor
@@ -1063,7 +1106,8 @@ async function abrirExamen(id, asignatura = null) {
   pauseCurrent();
   save();
   sync();
-  if (S.onboarded) showHome(); else showOnboarding(0);
+  if (!S.onboarded) { S.onboarded = true; save(); }
+  showHome();
 }
 
 // Volver del examen a la biblioteca (a su asignatura, o al inicio)
@@ -1091,12 +1135,14 @@ function menuCuenta() {
   modal(`
     <h2>Tu cuenta</h2>
     <p class="muted small"><b>${esc(u.nombre || '')}</b><br>${esc(u.email || '')}<br>Tu progreso se guarda en tu cuenta: puedes seguir desde cualquier dispositivo.</p>
+    <button class="btn secondary" data-a="presentacion">👋 Ver la presentación de KAI</button>
     ${u.admin ? '<button class="btn secondary" data-a="admin">🛠️ Administración</button>' : ''}
     <button class="btn secondary" data-a="salir">🚪 Cerrar sesión</button>
     <button class="btn ghost" data-a="close">Cerrar</button>
     <p class="footer">Hecho con 💙 por ${CREATOR} · KAI · versión ${VERSION}</p>`, (el, close) => {
     el.querySelector('[data-a=close]').onclick = close;
     el.querySelector('[data-a=admin]')?.addEventListener('click', () => { close(); showAdmin(); });
+    el.querySelector('[data-a=presentacion]').onclick = () => { close(); showPresentacion(0); };
     el.querySelector('[data-a=salir]').onclick = () => { if (confirm('¿Cerrar sesión en este dispositivo? Tu progreso queda guardado en tu cuenta.')) cerrarSesion(); };
   });
 }

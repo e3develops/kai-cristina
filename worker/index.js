@@ -27,6 +27,22 @@ app.use('/api/*', async (c, next) => {
 // Nada de la API se guarda en cachés intermedias: son datos privados
 app.use('/api/*', async (c, next) => { await next(); c.header('Cache-Control', 'private, no-store'); });
 
+// Preferencias de la cuenta (JSON pequeño: presentación vista, etc.)
+app.get('/api/preferencias', async c => {
+  const p = await c.env.DB.prepare('select datos from preferencia where user_id = ?').bind(c.get('user').id).first();
+  return c.json(json(p?.datos) || {});
+});
+app.patch('/api/preferencias', async c => {
+  const cambios = await leerJson(c);
+  if (!cambios || typeof cambios !== 'object' || Array.isArray(cambios)) return c.json({ error: 'No válido' }, 400);
+  const uid = c.get('user').id;
+  const p = await c.env.DB.prepare('select datos from preferencia where user_id = ?').bind(uid).first();
+  const datos = JSON.stringify({ ...(json(p?.datos) || {}), ...cambios });
+  if (datos.length > 4000) return c.json({ error: 'Demasiado grande' }, 400);
+  await c.env.DB.prepare('insert into preferencia (user_id, datos) values (?, ?) on conflict (user_id) do update set datos = excluded.datos').bind(uid, datos).run();
+  return c.json(JSON.parse(datos));
+});
+
 app.get('/api/yo', c => {
   const u = c.get('user');
   return c.json({ id: u.id, nombre: u.name, email: u.email, admin: esAdmin(c.env, u) });

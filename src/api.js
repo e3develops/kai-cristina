@@ -18,6 +18,8 @@ async function req(path, opts = {}) {
 
 export const api = {
   yo: () => req('/api/yo'),
+  preferencias: () => req('/api/preferencias'),
+  guardarPreferencias: cambios => req('/api/preferencias', { method: 'PATCH', body: JSON.stringify(cambios) }),
   examenes: () => req('/api/examenes'),
   examen: id => req(`/api/examenes/${id}`),
   json: url => req(url, { cache: 'no-cache' }),
