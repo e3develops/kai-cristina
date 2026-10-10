@@ -22,6 +22,9 @@
     a.btn { display: block; background: var(--primary); color: #fff; text-decoration: none; font-weight: 800; font-size: 18px;
       padding: 16px; border-radius: 16px; box-shadow: 0 4px 0 var(--primary-2); margin-top: 8px; }
     .url { font-weight: 800; color: var(--primary-2); }
+    button.btn { width: 100%; border: 0; cursor: pointer; font-family: inherit; }
+    .btn.sec { background: var(--card); color: var(--primary-2); box-shadow: 0 4px 0 #C8E2DC; border: 2px solid #D9ECE8; margin-top: 14px; font-weight: 800; font-size: 17px; padding: 14px; border-radius: 16px; }
+    .nota { font-size: 14px; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -29,7 +32,9 @@
     <img src="kai.png" alt="KAI">
     <h1>¡Me he mudado! 🏠</h1>
     <p>Ahora vivo en <span class="url">kai-e3develops.pages.dev</span>, con <b>tu propia cuenta</b>: tu progreso se guarda aunque cambies de móvil, y puedes añadir todas tus asignaturas y exámenes 💙</p>
-    <a class="btn" href="https://kai-e3develops.pages.dev/" target="_blank" rel="noopener">Ir a mi nueva casa</a>
+    <a class="btn" id="ir" href="https://kai-e3develops.pages.dev/" target="_blank" rel="noopener">Ir a mi nueva casa</a>
+    <button class="btn sec" id="copiar" type="button">Copiar la dirección</button>
+    <p class="nota" id="nota">Si no se abre Safari: copia la dirección, abre <b>Safari</b> y pégala arriba.</p>
     <div class="card">
       <ol>
         <li>Toca el botón: se abre en <b>Safari</b>.</li>
@@ -39,5 +44,26 @@
       </ol>
     </div>
   </main>
+  <script>
+    var NUEVA = 'https://kai-e3develops.pages.dev/';
+    // Dentro de la app instalada (iPhone), los enlaces se abren en un navegador integrado desde el que no se
+    // puede instalar. x-safari-https:// (iOS 17+) obliga a abrir Safari.
+    var ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ios && (navigator.standalone || matchMedia('(display-mode: standalone)').matches)) {
+      document.getElementById('ir').href = NUEVA.replace('https://', 'x-safari-https://');
+    }
+    document.getElementById('copiar').onclick = function () {
+      var b = this;
+      var hecho = function () { b.textContent = '¡Copiada! Ahora pégala en Safari'; };
+      if (navigator.clipboard) navigator.clipboard.writeText(NUEVA).then(hecho, function () { prompt('Copia esta dirección:', NUEVA); });
+      else prompt('Copia esta dirección:', NUEVA);
+    };
+    // Mantener esta página al día en el móvil: si llega una versión nueva, se recarga sola (una vez)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+      var recargada = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () { if (!recargada) { recargada = true; location.reload(); } });
+    }
+  </script>
 </body>
 </html>
