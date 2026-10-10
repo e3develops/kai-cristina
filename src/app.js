@@ -1,4 +1,5 @@
 import { kaiSVG, setKaiMood } from './kai.js';
+import { app, esc, render, modal, guardTaps, onRender, aviso } from './ui.js';
 import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4 } from './installart.js';
 import { CREADOR, VERSION } from './config.js';
 import { api, SinConexion, SinSesion, sesionGuardada, guardarSesion, olvidarSesion } from './api.js';
@@ -6,6 +7,7 @@ import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, D
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
 import { fmtNota, describeFormato } from './engine/nota.js';
 import { why, explicacion, fmtRango } from './porque.js';
+import { configurarBiblioteca, cargarBiblioteca, showInicio, showAsignatura, formExamen, explicarBiblioteca, olvidarBiblioteca } from './biblioteca.js';
 
 // ------------------------------------------------------------------
 // Configuración
@@ -15,8 +17,8 @@ const CREATOR = CREADOR;
 const coma = () => (NAME ? `, ${NAME}` : ''); // "¡Genial, Cristina!" o "¡Genial!" si aún no sé su nombre
 const hola = () => (NAME ? `¡Hola, <b>${esc(NAME)}</b>!` : '¡Hola!');
 
-const app = document.getElementById('app');
 let EXAMEN;          // { id, nombre, formato, nivel, almacen, preguntas, documentos, resaltados }
+let ASIGNATURA = null; // asignatura del examen abierto (para el botón de volver)
 let E;               // motor de estudio del examen
 let DATA;            // { temas, preguntas }
 let Q = {};          // id -> pregunta
@@ -26,7 +28,6 @@ let sess = null;     // sesión de test en curso
 // ------------------------------------------------------------------
 // Utilidades
 // ------------------------------------------------------------------
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = x => Math.round(x * 100);
 const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 const save = () => { saveState(EXAMEN.almacen, S); programarSync(); };
@@ -77,19 +78,7 @@ function homeMessage(r) {
 // Pantallas
 // ------------------------------------------------------------------
 let readyTimer = null;
-// Bloquea los toques unos ms tras cada cambio de pantalla: evita que un doble toque
-// "atraviese" y pulse lo que aparece debajo del dedo en la pantalla nueva
-function guardTaps(el, ms = 400) {
-  el.style.pointerEvents = 'none';
-  setTimeout(() => { el.style.pointerEvents = ''; }, ms);
-}
-function render(html, mood) {
-  clearTimeout(readyTimer);
-  app.innerHTML = html;
-  if (mood) setKaiMood(app, mood);
-  window.scrollTo(0, 0);
-  guardTaps(app);
-}
+onRender(() => clearTimeout(readyTimer));
 
 // ---------- Puerta de instalación (iPhone/iPad en Safari) ----------
 // En iPhone la app solo se usa desde el icono de la pantalla de inicio: así el progreso
@@ -233,7 +222,7 @@ function showHome() {
   render(`
     <div class="screen">
       <div class="topbar">
-        <div><div class="hello">Hola${coma()}&nbsp;👋</div><h1>¡A por el examen!</h1></div>
+        <div><button class="back-link" id="biblio">‹ ${esc(ASIGNATURA?.nombre || 'Inicio')}</button><h1>${esc(EXAMEN.nombre)}</h1></div>
         <button class="icon-btn" id="menu" aria-label="Menú">⚙️</button>
       </div>
 
@@ -285,24 +274,17 @@ function showHome() {
   app.querySelector('#sim').addEventListener('click', () => S.diag ? confirmSim() : showDiagRequired());
   app.querySelector('#progress').addEventListener('click', showProgress);
   app.querySelector('#menu').addEventListener('click', showMenu);
+  app.querySelector('#biblio').addEventListener('click', salirAlInicio);
   app.querySelectorAll('.tema').forEach(el => el.addEventListener('click', () => startSession('practice', { tema: el.dataset.tema })));
 }
 
-function modal(html, bind) {
-  const bg = document.createElement('div');
-  bg.className = 'modal-bg';
-  bg.innerHTML = `<div class="modal">${html}</div>`;
-  bg.addEventListener('click', e => { if (e.target === bg) bg.remove(); });
-  document.body.appendChild(bg);
-  guardTaps(bg);
-  bind(bg, () => bg.remove());
-}
 
 // Los "?": KAI explica el porqué de cada dato (textos en porque.js)
 function showWhy(key, arg) {
   const item = key === 'pregunta' ? sess?.items[sess.i]?.por : null;
-  const { titulo, html } = explicacion(key, { E, r: readiness(), arg, item, nombre: NAME });
-  if (!titulo) return;
+  const ex = key.startsWith('b-') ? explicarBiblioteca(key, arg) : E ? explicacion(key, { E, r: readiness(), arg, item, nombre: NAME }) : null;
+  if (!ex?.titulo) return;
+  const { titulo, html } = ex;
   modal(`
     <div class="kai-row"><div class="kai-wrap">${kaiSVG()}</div><div class="bubble"><b>${titulo}</b></div></div>
     <div class="why-body">${html}</div>
@@ -313,7 +295,7 @@ function showWhy(key, arg) {
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-why]');
-  if (!b || !E) return;
+  if (!b) return;
   e.preventDefault();
   e.stopPropagation();
   showWhy(b.dataset.why, b.dataset.arg);
@@ -321,17 +303,16 @@ document.addEventListener('click', e => {
 
 function showMenu() {
   modal(`
-    <h2>Opciones</h2>
-    <p class="muted small">Cuenta: <b>${esc(sesionGuardada()?.user?.email || '')}</b><br>Tu progreso se guarda en tu cuenta: puedes seguir desde cualquier dispositivo.</p>
+    <h2>${esc(EXAMEN.nombre)}</h2>
+    <button class="btn secondary" data-a="editar">✏️ Fecha, formato y nivel</button>
     <button class="btn secondary" data-a="tuto">👋 Ver la presentación de KAI</button>
-    <button class="btn secondary" data-a="reset">🗑️ Reiniciar mi progreso</button>
-    <button class="btn secondary" data-a="salir">🚪 Cerrar sesión</button>
+    <button class="btn secondary" data-a="reset">🗑️ Reiniciar mi progreso en este examen</button>
     <button class="btn ghost" data-a="close">Cerrar</button>`, (el, close) => {
     el.querySelector('[data-a=tuto]').onclick = () => { close(); showOnboarding(0); };
-    el.querySelector('[data-a=salir]').onclick = () => { if (confirm('¿Cerrar sesión en este dispositivo? Tu progreso queda guardado en tu cuenta.')) cerrarSesion(); };
+    el.querySelector('[data-a=editar]').onclick = async () => { close(); await sync(); formExamen(ASIGNATURA?.id || null, { ...EXAMEN }); };
     el.querySelector('[data-a=close]').onclick = close;
     el.querySelector('[data-a=reset]').onclick = () => {
-      if (confirm('¿Seguro? Se borrará todo tu progreso y KAI empezará de cero.')) {
+      if (confirm('¿Seguro? Se borrará tu progreso en este examen y KAI empezará de cero.')) {
         resetProgress(); close(); showHome();
       }
     };
@@ -969,7 +950,7 @@ async function sync() {
   if (!EXAMEN || !S || syncing) return;
   syncing = true;
   try {
-    const { estado } = await api.subirProgreso(EXAMEN.id, S);
+    const { estado } = await api.subirProgreso(EXAMEN.id, S, E ? resumen() : undefined);
     // Se junta con lo actual (no se pisa: puede haber respuestas nuevas mientras viajaba la petición)
     const m = mergeState(S, estado);
     for (const k of ['n', 'c', 'q', 'sims', 'diag', 'onboarded', 'readyShown', 'reinicio']) if (k in m) S[k] = m[k];
@@ -1007,21 +988,36 @@ async function arrancar() {
     // Sin conexión pero ya había entrado antes: seguimos con lo guardado
   }
   NAME = (sesion.user.nombre || '').split(' ')[0];
+  guardarSesion(sesion);
+  configurarBiblioteca({
+    abrirExamen, nombre: () => NAME, menuCuenta,
+    iniciales: () => (sesion.user.nombre || sesion.user.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase(),
+    entrar: () => showLogin(),
+  });
+  try { await showInicio(); } catch (e) { if (e instanceof SinSesion) showLogin(); }
+}
+
+// Abre el estudio de un examen (la KAI de siempre): datos, progreso del móvil + de la cuenta, motor
+async function abrirExamen(id, asignatura = null) {
+  if (E && EXAMEN) await sync(); // lo del examen anterior, a la cuenta
+  sess = null;
+  ASIGNATURA = asignatura;
+  pantallaCarga('Abriendo tu examen…');
+  const sesion = sesionGuardada() || {};
+  sesion.examenes ||= {};
   try {
-    const lista = await api.examenes();
-    if (!lista.length) return pantallaError('Aún no tienes exámenes', 'Muy pronto podrás crearlos desde aquí.');
-    sesion.examen = await api.examen((lista.find(x => x.id === sesion.examen?.id) || lista[0]).id);
+    sesion.examenes[id] = await api.examen(id);
+    guardarSesion(sesion);
   } catch (e) {
     if (e instanceof SinSesion) return showLogin();
-    if (!sesion.examen) return pantallaError('No he podido cargar tu examen', 'Comprueba la conexión y vuelve a intentarlo.');
+    if (!sesion.examenes[id]) return pantallaError('No he podido abrir el examen', 'Comprueba la conexión y vuelve a intentarlo.');
   }
-  guardarSesion(sesion);
-  EXAMEN = sesion.examen;
-  try {
-    DATA = await api.json(EXAMEN.preguntas);
-  } catch (e) {
+  const meta = sesion.examenes[id];
+  let data;
+  try { data = await api.json(meta.preguntas); } catch (e) {
     return pantallaError('Uy, no he podido cargar las preguntas.', 'Comprueba la conexión y vuelve a intentarlo.');
   }
+  EXAMEN = meta; DATA = data; HL = null; DOCS = null;
   S = loadState(EXAMEN.almacen);
   try {
     const { estado } = await api.progreso(EXAMEN.id);
@@ -1033,6 +1029,39 @@ async function arrancar() {
   save();
   sync();
   if (S.onboarded) showHome(); else showOnboarding(0);
+}
+
+// Volver del examen a la biblioteca (a su asignatura, o al inicio)
+async function salirAlInicio() {
+  await sync();
+  if (!ASIGNATURA?.id) return showInicio();
+  await cargarBiblioteca().catch(() => {});
+  showAsignatura(ASIGNATURA.id);
+}
+
+// Resumen del examen abierto para la biblioteca (nota prevista, lo que falta…), sin cargar sus preguntas
+function resumen() {
+  const r = readiness();
+  const w = remainingWork();
+  const cubierto = r.checks.find(c => c.id === 'cobertura')?.ok;
+  return {
+    nota: r.nota, rango: r.rango, objetivo: E.nivel.nota, listo: r.ready,
+    minutos: r.ready ? 0 : Math.max(w.minutes, cubierto ? 30 : 0), // temario visto pero sin llegar: práctica y simulacros
+    dominado: qStats().pOk, respuestas: S.n, t: Date.now(),
+  };
+}
+
+function menuCuenta() {
+  const u = sesionGuardada()?.user || {};
+  modal(`
+    <h2>Tu cuenta</h2>
+    <p class="muted small"><b>${esc(u.nombre || '')}</b><br>${esc(u.email || '')}<br>Tu progreso se guarda en tu cuenta: puedes seguir desde cualquier dispositivo.</p>
+    <button class="btn secondary" data-a="salir">🚪 Cerrar sesión</button>
+    <button class="btn ghost" data-a="close">Cerrar</button>
+    <p class="footer">Hecho con 💙 por ${CREATOR} · KAI · versión ${VERSION}</p>`, (el, close) => {
+    el.querySelector('[data-a=close]').onclick = close;
+    el.querySelector('[data-a=salir]').onclick = () => { if (confirm('¿Cerrar sesión en este dispositivo? Tu progreso queda guardado en tu cuenta.')) cerrarSesion(); };
+  });
 }
 
 // ---------- Entrar / crear cuenta ----------
@@ -1085,6 +1114,7 @@ async function cerrarSesion() {
   await sync();
   try { await api.salir(); } catch (e) { /* aunque falle, se olvida aquí */ }
   olvidarSesion();
+  olvidarBiblioteca();
   try { (await caches.keys()).forEach(k => caches.delete(k)); } catch (e) { /* nada */ }
   location.reload();
 }

@@ -112,8 +112,8 @@ usuarios ─< asignaturas ─< examenes (fecha, formato, nivel, estado)
 | Fase | Contenido |
 |---|---|
 | 0 ✅ | Desacoplar el motor de KAI del contenido (examen como dato). Migrar a Vite. Olvido con los días (FSRS), previsión para el día del examen en rango, los "?" de KAI. Calibración con estudiantes simulados (`tools/calibrar.mjs`). |
-| 1 | Cloudflare: login, BD, sincronización. Importar el examen actual y migrar el progreso de Cris. Mudanza a `kai.e3develops.com`. |
-| 2 | Biblioteca, asignaturas, exámenes (con formato), calendario, recomendación con (?). |
+| 1 ✅ | Cloudflare: login (registro abierto), BD, sincronización entre dispositivos, contenido privado en KV, `kai.e3develops.com`. (Se empieza limpio: sin migrar el progreso antiguo.) |
+| 2 ✅ | Biblioteca: Inicio con "te recomiendo…" (?), asignaturas (emoji y color), exámenes con fecha/formato/nivel, calendario con plan diario (?), nota real tras el examen. |
 | 3 | Fábrica semiautomática: subida, estados, avisos, publicación. Niveles y nota por formato. |
 | 4 | Fábrica automática con la API. |
 | 5 | Pregunta de nota real y calibración. Extras. |
