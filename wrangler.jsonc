@@ -30,6 +30,7 @@
   // Subdominio propio (la web de e3develops.com no se toca); sin la dirección *.workers.dev
   "routes": [{ "pattern": "kai.e3develops.com", "custom_domain": true }],
   "workers_dev": false,
+  "preview_urls": false,
   "vars": {
     // Cuenta de administrador (puede ver cualquier examen)
     "ADMIN": "e3develops@gmail.com",
