@@ -10,3 +10,6 @@ dist/
 # Contenido generado de exámenes de usuarios: va a KV, nunca a git (solo se versiona el examen de pruebas)
 contenido/*
 !contenido/cap28-taller2/
+
+# Capturas de revisión de diseño (tools/capturas.mjs)
+capturas/

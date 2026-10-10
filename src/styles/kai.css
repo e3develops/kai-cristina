@@ -9,9 +9,9 @@
 @keyframes kShadow { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.78); opacity: .65; } }
 
 /* Propulsor */
-.kai .k-flame { transform-origin: 100px 198px; animation: kFlame .18s ease-in-out infinite alternate; }
-.kai .k-flame-in { animation-duration: .13s; }
-@keyframes kFlame { from { transform: scaleY(.82) scaleX(.95); } to { transform: scaleY(1.08) scaleX(1.04); } }
+.kai .k-flame { transform-origin: 100px 198px; animation: kFlame .6s ease-in-out infinite alternate; }
+.kai .k-flame-in { animation-duration: .45s; }
+@keyframes kFlame { from { transform: scaleY(.92) scaleX(.97); } to { transform: scaleY(1.04) scaleX(1.02); } }
 .kai .k-jetlight { animation: kLed 1.2s ease-in-out infinite; }
 
 /* Cabeza, ojos, cejas */
@@ -57,6 +57,7 @@
 .kai.thumbs .k-cheeks { opacity: 1; }
 .kai.thumbs .k-blush { opacity: .55; }
 @keyframes kHop { 0% { transform: translateY(0); } 40% { transform: translateY(-14px); } 100% { transform: translateY(0); } }
+.kai.hop .k-bob { animation: kHop .5s cubic-bezier(.2, .8, .2, 1) 1, kFloat 3.2s ease-in-out .5s infinite; }
 
 /* ¡Ups! mano a la cabeza */
 .kai.facepalm .k-arm-l { animation: none; transform: rotate(130deg); }
@@ -66,12 +67,12 @@
 .kai.facepalm .k-brow-r { transform: rotate(12deg) translateY(3px); }
 
 /* Celebrar: brazos arriba, propulsor a tope */
-.kai.celebrate .k-bob { animation: kJump .7s ease-in-out infinite; }
+.kai.celebrate .k-bob { animation: kJump .7s ease-in-out 3, kFloat 3.2s ease-in-out 2.1s infinite; }
 .kai.celebrate .k-arm-r { animation: none; transform: rotate(-65deg); }
 .kai.celebrate .k-arm-l { animation: none; transform: rotate(65deg); }
 .kai.celebrate .k-cheeks { opacity: 1; }
 .kai.celebrate .k-blush { opacity: .6; }
-.kai.celebrate .k-flame { animation-duration: .09s; }
+.kai.celebrate .k-flame { animation-duration: .3s; }
 @keyframes kJump { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-18px); } }
 
 /* ---- Easter eggs (kaifun.js) ---- */
@@ -86,7 +87,7 @@
 .kai.dance .k-arm-l { animation: kDanceL .45s ease-in-out infinite alternate; }
 .kai.dance .k-arm-r { animation: kDanceR .45s ease-in-out infinite alternate; }
 .kai.dance .k-head { animation: kTalk .45s ease-in-out infinite; }
-.kai.dance .k-flame { animation-duration: .08s; }
+.kai.dance .k-flame { animation-duration: .3s; }
 .kai.dance .k-cheeks { opacity: 1; }
 .kai.dance .k-blush { opacity: .6; }
 @keyframes kDance { 0%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(-10px, -12px) rotate(-8deg); } 50% { transform: translate(0, 0) rotate(0); } 75% { transform: translate(10px, -12px) rotate(8deg); } }
@@ -125,7 +126,7 @@
 @keyframes kSay { 0% { opacity: 0; transform: translateY(8px) scale(.9); } 12% { opacity: 1; transform: none; } 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-12px); } }
 .kai-fx { position: fixed; z-index: 94; pointer-events: none; font-size: 22px; animation: kFx 1.6s ease-out forwards; }
 @keyframes kFx { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx, 0px), -90px) scale(1.2) rotate(var(--rot, 0deg)); } }
-.kai-toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 16px); z-index: 96; transform: translateX(-50%); background: var(--ink, #0F2A2E); color: #fff; font-weight: 900; font-size: 16px; padding: 10px 18px; border-radius: 99px; box-shadow: 0 8px 24px rgba(15, 42, 46, .25); animation: kToast 2.4s ease forwards; pointer-events: none; white-space: nowrap; }
+.kai-toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 16px); z-index: 96; transform: translateX(-50%); background: var(--ink, #0F2A2E); color: #fff; font-weight: 900; font-size: 16px; padding: 10px 18px; border-radius: 99px; box-shadow: 0 8px 24px rgba(15, 42, 46, .25); animation: kToast 2.4s ease forwards; pointer-events: none; white-space: normal; max-width: calc(100vw - 32px); text-align: center; }
 @keyframes kToast { 0% { opacity: 0; transform: translate(-50%, -20px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -10px); } }
 
 
@@ -134,9 +135,9 @@
 }
 
 /* ---- Pantalla del pecho: cruz → electro → corazón → TAC → jeringa → cápsula (15 s cada una) ---- */
-.kai .k-scr { opacity: 0; animation: kScr 90s linear infinite both; animation-delay: calc(var(--i) * 15s); }
+.kai .k-scr { opacity: 0; animation: kScr 90s linear infinite both; animation-delay: calc(var(--i) * 15s - 1s); }
 @keyframes kScr { 0%, .5% { opacity: 0; } .9%, 16.5% { opacity: 1; } 16.67%, 100% { opacity: 0; } }
-.kai .k-scr-off { opacity: 0; pointer-events: none; animation: kOff 15s linear infinite; }
+.kai .k-scr-off { opacity: 0; pointer-events: none; }
 @keyframes kOff { 0%, 2.6% { opacity: .9; } 3.4% { opacity: 0; } 4.2% { opacity: .5; } 5%, 99.4% { opacity: 0; } 100% { opacity: .9; } }
 .kai .k-ecg { stroke-dasharray: 120; animation: kEcg 1.6s linear infinite; }
 @keyframes kEcg { from { stroke-dashoffset: 120; } to { stroke-dashoffset: -120; } }
@@ -149,3 +150,7 @@
 @media (prefers-reduced-motion: reduce) {
   .kai .k-scr-0 { opacity: 1; }
 }
+
+/* KAI pequeño junto a la corrección: tranquilo (solo flota y parpadea) */
+.mini-kai .kai :is(.k-flame, .k-jetlight, .k-led, .k-scr, .k-arm) { animation: none !important; }
+.mini-kai .kai .k-scr-0 { opacity: 1; }

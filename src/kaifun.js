@@ -175,6 +175,6 @@ window.kaiFun = {
     if (n < 5 || n % 5) return;
     toast(`¡Racha de ${n}! 🔥`);
     const k = mainKai();
-    if (k) { pulse(k, 'flip', 950); sparkle(k, ['🔥', '⭐', '✨'], 6); }
+    if (k) { pulse(k, 'hop', 520); sparkle(k, ['🔥', '⭐', '✨'], 6); }
   },
 };

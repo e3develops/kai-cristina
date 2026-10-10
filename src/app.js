@@ -1,5 +1,5 @@
 import { kaiSVG, setKaiMood } from './kai.js';
-import { app, esc, render, modal, guardTaps, onRender, aviso } from './ui.js';
+import { app, esc, render, modal, guardTaps, onRender, aviso, confirmar, salir } from './ui.js';
 import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4 } from './installart.js';
 import { CREADOR, VERSION } from './config.js';
 import { api, SinConexion, SinSesion, sesionGuardada, guardarSesion, olvidarSesion } from './api.js';
@@ -56,7 +56,7 @@ const resetProgress = () => { S = freshState(); S.onboarded = true; S.reinicio =
 // Frases de KAI
 // ------------------------------------------------------------------
 const okMsgs = () => ['¡Bien!', '¡Exacto!', '¡Eso es!', `¡Genial${coma()}!`, '¡Perfecto!', '¡Correcto!', '¡Muy bien!', '¡Toma ya! 💪'];
-const KO_MSGS = ['¡Casi! Mira lo que dice el libro:', 'No pasa nada, te la vuelvo a preguntar pronto.', 'Ojo con esta, léela con calma:', 'Esta la repasamos otra vez en un ratito.'];
+const KO_MSGS = ['Mira lo que dice el libro:', 'No pasa nada, te la vuelvo a preguntar pronto.', 'Ojo con esta, léela con calma:', 'Esta la repasamos otra vez en un ratito.'];
 
 function homeMessage(r) {
   const failed = failedIds().length;
@@ -210,27 +210,38 @@ function showHome() {
       <div class="card tema ${S.diag ? '' : 'locked'}" data-tema="${t.id}">
         <div class="head">
           <div class="emoji">${t.emoji}</div>
-          <div><div class="name">${esc(t.nombre)}</div><div class="meta">${esc(t.corto)} · ${qs.ok} bien de ${qs.total} · ${qs.seen} respondidas</div></div>
+          <div><div class="name">${esc(t.nombre)}</div><div class="meta">${t.corto !== t.nombre ? `${esc(t.corto)} · ` : ''}${qs.ok} bien de ${qs.total} · ${qs.seen} respondidas</div></div>
         </div>
         <div class="bar-row"><div class="bar"><i style="width:${pct(qs.pOk)}%"></i></div><span class="pct">${pct(qs.pOk)}%</span></div>
       </div>`;
   }).join('');
 
-  const main = S.diag
-    ? `<button class="btn" id="study">Seguir estudiando<span class="sub">KAI elige las preguntas por ti</span></button>`
-    : `<button class="btn" id="diag">Empezar diagnóstico<span class="sub">${DIAG_LEN} preguntas · unos 5 minutos</span></button>`;
+  // Una sola acción principal: continuar lo que está a medias, o empezar/seguir
+  const aMedias = ['diag', 'sim'].find(t => S.paused[t]);
+  const resp = t => S.paused[t].items.filter(it => it && it.chosen !== null).length;
+  const main = aMedias
+    ? `<div class="card resume">
+        <div><b>Tienes ${aMedias === 'sim' ? 'un simulacro' : 'el diagnóstico'} a medias</b><br><span class="muted small">Llevas ${resp(aMedias)} de ${S.paused[aMedias].len} preguntas</span></div>
+        <div class="btn-col"><button class="btn" data-resume="${aMedias}">Continuar</button><button class="btn ghost" data-discard="${aMedias}">Descartar</button></div>
+      </div>`
+    : S.diag
+      ? `<button class="btn" id="study">Seguir estudiando<span class="sub">KAI elige las preguntas por ti</span></button>`
+      : `<button class="btn" id="diag">Empezar diagnóstico<span class="sub">${DIAG_LEN} preguntas · unos 5 minutos</span></button>`;
 
   render(`
     <div class="screen">
       <div class="topbar">
-        <div><button class="back-link" id="biblio">‹ ${esc(ASIGNATURA?.nombre || 'Inicio')}</button><h1>${esc(EXAMEN.nombre)}</h1></div>
-        <button class="icon-btn" id="menu" aria-label="Menú">⚙️</button>
+        <button class="back-link" id="biblio">‹ ${esc(ASIGNATURA?.nombre || 'Inicio')}</button>
+        <button class="icon-btn" id="menu" aria-label="Opciones del examen">⋯</button>
       </div>
+      <h1>${esc(EXAMEN.nombre)}</h1>
 
       <div class="kai-row">
         <div class="kai-wrap">${kaiSVG()}</div>
         <div class="bubble">${homeMessage(r)}</div>
       </div>
+
+      ${main}
 
       <div class="card">
         <div class="ready-card">
@@ -244,33 +255,28 @@ function showHome() {
         </div>
       </div>
 
-      ${['diag', 'sim'].filter(t => S.paused[t]).map(t => `<div class="card resume">
-        <div><b>Tienes ${t === 'sim' ? 'un simulacro' : 'el diagnóstico'} a medias</b><br><span class="muted small">Llevas ${S.paused[t].items.filter(it => it && it.chosen !== null).length} de ${S.paused[t].len} preguntas respondidas</span></div>
-        <div class="btn-col"><button class="btn accent" data-resume="${t}">Continuar</button><button class="btn ghost" data-discard="${t}">Descartar</button></div>
-      </div>`).join('')}
-
-      ${main}
-
       <div class="grid2">
-        <button class="tile ${lock}" id="fallos" ${failed || !S.diag ? '' : 'disabled'}><span class="ic">🔁</span><b>Repasar fallos${failed ? `<span class="badge">${failed}</span>` : ''}</b><span>Solo lo que has fallado</span></button>
+        <button class="tile ${lock}" id="fallos" ${failed || !S.diag ? '' : 'disabled'}><span class="ic">🔁</span><b>Repasar fallos${failed ? `<span class="badge">${failed}</span>` : ''}</b><span>${S.diag && !failed ? 'Sin fallos pendientes 🎉' : 'Solo lo que has fallado'}</span></button>
         <button class="tile ${lock}" id="sim"><span class="ic">📝</span><b>Simulacro</b><span>${SIM_LEN} preguntas tipo examen, sin ayudas</span></button>
-        <button class="tile" id="progress"><span class="ic">📚</span><b>Temario</b><span>Progreso y apuntes</span></button>
-        <button class="tile" id="diag2"><span class="ic">🩺</span><b>Diagnóstico</b><span>${S.diag ? `Último: ${pct(S.diag.score)}%` : 'Ver qué sabes ya'}</span></button>
+        <button class="tile" id="progress"><span class="ic">🗂️</span><b>Temario</b><span>Progreso y apuntes</span></button>
+        ${S.diag ? `<button class="tile" id="diag2"><span class="ic">🩺</span><b>Diagnóstico</b><span>Último: ${pct(S.diag.score)}%</span></button>` : ''}
       </div>
 
-      <div class="section-title"><h2>Temas</h2><span class="muted small">${S.diag ? 'Toca uno para practicarlo' : '🔒 Tras el diagnóstico'}</span></div>
+      <div class="section-title"><h2>Temas</h2><span class="muted small">${S.diag ? 'Toca uno para practicarlo' : 'Disponibles tras el diagnóstico'}</span></div>
       ${temas}
 
       <div class="footer">Hecho con 💙 por ${CREATOR} · KAI · versión ${VERSION}</div>
     </div>`, r.ready ? 'happy' : 'talk');
 
   app.querySelectorAll('[data-resume]').forEach(b => b.addEventListener('click', () => startSession(b.dataset.resume)));
-  app.querySelectorAll('[data-discard]').forEach(b => b.addEventListener('click', () => {
-    if (confirm(`¿Descartar ${b.dataset.discard === 'sim' ? 'el simulacro' : 'el diagnóstico'} a medias? Lo ya respondido sigue contando para tu repaso.`)) { delete S.paused[b.dataset.discard]; save(); showHome(); }
+  app.querySelectorAll('[data-discard]').forEach(b => b.addEventListener('click', async () => {
+    const cual = b.dataset.discard === 'sim' ? 'el simulacro' : 'el diagnóstico';
+    if (!(await confirmar({ titulo: `¿Descartar ${cual} a medias?`, texto: 'Lo que ya has respondido sigue contando para tu repaso.', si: 'Descartar', peligro: true }))) return;
+    delete S.paused[b.dataset.discard]; save(); showHome();
   }));
   app.querySelector('#study')?.addEventListener('click', () => startSession('practice'));
   app.querySelector('#diag')?.addEventListener('click', () => startSession('diag'));
-  app.querySelector('#diag2').addEventListener('click', () => startSession('diag'));
+  app.querySelector('#diag2')?.addEventListener('click', () => startSession('diag'));
   app.querySelector('#fallos').addEventListener('click', () => startSession('fallos'));
   app.querySelector('#sim').addEventListener('click', () => S.diag ? confirmSim() : showDiagRequired());
   app.querySelector('#progress').addEventListener('click', showProgress);
@@ -305,15 +311,18 @@ document.addEventListener('click', e => {
 function showMenu() {
   modal(`
     <h2>${esc(EXAMEN.nombre)}</h2>
-    <button class="btn secondary" data-a="editar">✏️ Fecha, formato y nivel</button>
-    <button class="btn secondary" data-a="tuto">📖 Cómo funciona este examen</button>
-    <button class="btn secondary" data-a="reset">🗑️ Reiniciar mi progreso en este examen</button>
-    <button class="btn ghost" data-a="close">Cerrar</button>`, (el, close) => {
+    <div class="menu-list">
+      <button data-a="editar">Fecha, formato y nivel</button>
+      <button data-a="tuto">Cómo funciona este examen</button>
+      <button class="peligro" data-a="reset">Reiniciar progreso</button>
+    </div>
+    <button class="btn ghost" data-a="close">Volver</button>`, (el, close) => {
     el.querySelector('[data-a=tuto]').onclick = () => { close(); showOnboarding(0); };
     el.querySelector('[data-a=editar]').onclick = async () => { close(); await sync(); formExamen(ASIGNATURA?.id || null, { ...EXAMEN }); };
     el.querySelector('[data-a=close]').onclick = close;
-    el.querySelector('[data-a=reset]').onclick = () => {
-      if (confirm('¿Seguro? Se borrará tu progreso en este examen y KAI empezará de cero.')) {
+    el.querySelector('[data-a=reset]').onclick = async () => {
+      close();
+      if (await confirmar({ titulo: '¿Reiniciar este examen?', texto: 'Tu progreso en él se borrará y empezaré de cero.', si: 'Sí, reiniciar', peligro: true })) {
         resetProgress(); close(); showHome();
       }
     };
@@ -346,15 +355,16 @@ async function showTemario(tab = 'progreso') {
   const body = tab === 'apuntes' ? await apuntesHTML() : progresoHTML();
   render(`
     <div class="screen">
-      <div class="topbar"><button class="icon-btn" id="back" aria-label="Volver">←</button><h2>Temario</h2><span style="width:44px;flex:0 0 44px"></span></div>
-      <div class="seg" role="tablist">
-        <button role="tab" data-tab="progreso" class="${tab === 'progreso' ? 'on' : ''}">📊 Progreso</button>
-        <button role="tab" data-tab="apuntes" class="${tab === 'apuntes' ? 'on' : ''}">📚 Apuntes</button>
+      <div class="topbar"><button class="back-link" id="back">‹ ${esc(EXAMEN.nombre)}</button></div>
+      <h1>Temario</h1>
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="${tab === 'progreso'}" data-tab="progreso" class="${tab === 'progreso' ? 'on' : ''}">Progreso</button>
+        <button role="tab" aria-selected="${tab === 'apuntes'}" data-tab="apuntes" class="${tab === 'apuntes' ? 'on' : ''}">Apuntes</button>
       </div>
       ${body}
     </div>`);
   app.querySelector('#back').onclick = showHome;
-  app.querySelectorAll('.seg [data-tab]').forEach(b => b.addEventListener('click', () => b.dataset.tab !== temarioTab && showTemario(b.dataset.tab)));
+  app.querySelectorAll('.tabs [data-tab]').forEach(b => b.addEventListener('click', () => b.dataset.tab !== temarioTab && showTemario(b.dataset.tab)));
   app.querySelectorAll('.sec-row').forEach(el => el.addEventListener('click', () => startSession('practice', { sec: el.dataset.sec })));
   app.querySelectorAll('.pg').forEach(el => el.addEventListener('click', () => openPage(el.dataset.tema, Number(el.dataset.pag))));
 }
@@ -386,7 +396,7 @@ async function apuntesHTML() {
     </div>`;
   }).join('');
   return `
-    <p class="muted">Los documentos con los que KAI hace las preguntas: <b>${docs.length} documentos · ${totalPags} páginas · ${DATA.preguntas.length} preguntas</b>. Toca una página para verla entera y practicar solo esa página.</p>
+    <p class="muted">Los documentos con los que KAI hace las preguntas: <b>${docs.length} ${docs.length === 1 ? 'documento' : 'documentos'} · ${totalPags} páginas · ${DATA.preguntas.length} preguntas</b>. Toca una página para verla entera y practicar solo esa página.</p>
     <div class="pg-legend"><span><i class="ok"></i>5 o más preguntas</span><span><i class="few"></i>menos de 5</span><span><i class="none"></i>sin preguntas</span></div>
     ${cards}`;
 }
@@ -397,7 +407,7 @@ function progresoHTML() {
       return `<div class="sec-row" data-sec="${esc(sec)}">
         <div class="t">${esc(secName(sec))} <span>${pct(q.pOk)}%</span></div>
         <div class="bar"><i style="width:${pct(q.pOk)}%"></i></div>
-        <div class="sec-nums"><span>✅ ${q.ok} bien</span><span>❌ ${q.ko} mal</span><span>⏳ ${q.total - q.seen} sin ver</span><span>de ${q.total}</span></div>
+        <div class="sec-nums"><span><i class="ok"></i>${q.ok} bien</span><span><i class="ko"></i>${q.ko} mal</span><span><i class="nv"></i>${q.total - q.seen} sin ver</span><span>de ${q.total}</span></div>
       </div>`;
     }).join('');
     const tq = qStats({ tema: t.id });
@@ -585,8 +595,9 @@ function answer(k) {
   fb.innerHTML = `
     <div class="feedback ${it.ok ? 'ok' : 'ko'}">
       <div class="fb-head"><div class="mini-kai">${kaiSVG()}</div><span>${it.ok ? rand(okMsgs()) : rand(KO_MSGS)}</span></div>
+      ${it.ok ? '' : `<div class="fb-correcta">La correcta: <b>${esc(q.opciones[q.correcta])}</b></div>`}
       <div class="quote">📖&nbsp;${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
-      <button class="book-btn" data-q="${esc(q.id)}">🔎 Llévame al libro</button>
+      <button class="book-btn" data-q="${esc(q.id)}">Llévame al libro ›</button>
     </div>
     <div class="sticky-bottom"><button class="btn" id="next">${sess.i + 1 >= sess.len ? 'Ver resultados' : 'Siguiente'}</button></div>`;
   setKaiMood(fb, it.ok ? 'happy thumbs' : 'facepalm');
@@ -596,13 +607,26 @@ function answer(k) {
   fb.querySelector('#next').onclick = () => { if (!sess) return; sess.i++; nextQuestion(); };
   fb.querySelector('.book-btn').onclick = () => openBook(q.id);
   guardTaps(fb);
-  // Desplaza lo justo para ver la corrección, sin sacar la pregunta de la pantalla
+  // Desplaza lo justo para ver la corrección entera por encima del botón fijo, sin sacar la pregunta de la pantalla
   setTimeout(() => {
-    const top = fb.getBoundingClientRect().top;
+    const box = fb.querySelector('.feedback');
+    if (!box || !box.isConnected) return;
+    const tapa = fb.querySelector('.sticky-bottom')?.offsetHeight || 0;
     const qTop = app.querySelector('.question')?.getBoundingClientRect().top ?? 0;
-    const need = top - window.innerHeight * 0.55;
-    if (need > 0) window.scrollBy({ top: Math.min(need, Math.max(0, qTop - 8)), behavior: 'smooth' });
-  }, 60);
+    const need = box.getBoundingClientRect().bottom - (window.innerHeight - tapa - 8);
+    if (need > 0) suave(Math.min(need, Math.max(0, qTop - 8)));
+  }, 180);
+}
+// Desplazamiento con aceleración y frenada suaves (o instantáneo si se prefiere menos movimiento)
+function suave(dy, ms = 420) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return window.scrollBy(0, dy);
+  const y0 = window.scrollY, t0 = performance.now();
+  const paso = t => {
+    const k = Math.min(1, (t - t0) / ms);
+    window.scrollTo(0, y0 + dy * (k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2));
+    if (k < 1) requestAnimationFrame(paso);
+  };
+  requestAnimationFrame(paso);
 }
 
 // ---------- Visor "Llévame al libro": la página original con la frase subrayada ----------
@@ -625,7 +649,7 @@ function unlockScroll() {
 let ignorePop = false; // el history.back() que hacemos al cerrar el visor no debe tocar el test
 function closeBook(fromPop = false) {
   if (!viewerEl) return;
-  viewerEl.remove();
+  salir(viewerEl);
   viewerEl = null;
   unlockScroll();
   if (!fromPop) { ignorePop = true; try { history.back(); } catch (e) { ignorePop = false; } }
@@ -663,7 +687,7 @@ function openViewer({ img, rects, title, sub, footer, onPractice }) {
   viewerEl.className = 'viewer';
   viewerEl.innerHTML = `
     <div class="v-top">
-      <button class="v-back" data-a="close" aria-label="Volver">← Volver</button>
+      <button class="v-back" data-a="close" aria-label="Volver">‹</button>
       <div class="v-title"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
       <div class="v-zoom"><button class="icon-btn" data-a="out" aria-label="Alejar">−</button><button class="icon-btn" data-a="in" aria-label="Acercar">+</button></div>
     </div>
@@ -693,19 +717,26 @@ function openViewer({ img, rects, title, sub, footer, onPractice }) {
     scroller.scrollLeft = fx * page.clientWidth - cx;
     scroller.scrollTop = fy * page.clientHeight - cy;
   };
+  let colocado = false;
   const focusHighlight = () => {
-    // Acerca y centra la vista en el primer subrayado
-    const r = rects[0];
-    if (!r) return;
-    zoom = 2;
-    page.style.width = '200%';
-    const W = page.clientWidth, H = page.clientHeight;
-    scroller.scrollLeft = Math.max(0, (r[0] + r[2] / 2) * W - scroller.clientWidth / 2);
-    scroller.scrollTop = Math.max(0, (r[1] + r[3] / 2) * H - scroller.clientHeight / 2);
+    if (colocado || !im.naturalWidth) return;
+    colocado = true;
+    // Acerca lo justo para que todo el subrayado quepa a lo ancho, y lo centra
+    if (rects.length) {
+      const x0 = Math.min(...rects.map(r => r[0])), x1 = Math.max(...rects.map(r => r[0] + r[2]));
+      const y0 = Math.min(...rects.map(r => r[1])), y1 = Math.max(...rects.map(r => r[1] + r[3]));
+      zoom = Math.min(3, Math.max(1, 0.9 / Math.max(0.05, x1 - x0)));
+      page.style.width = `${zoom * 100}%`;
+      const W = page.clientWidth, H = page.clientHeight;
+      scroller.scrollLeft = Math.max(0, ((x0 + x1) / 2) * W - scroller.clientWidth / 2);
+      scroller.scrollTop = Math.max(0, ((y0 + y1) / 2) * H - scroller.clientHeight / 2);
+    }
+    page.classList.add('listo');
   };
   im.onload = () => requestAnimationFrame(focusHighlight);
   if (im.complete) requestAnimationFrame(focusHighlight);
-  im.onerror = () => { scroller.innerHTML = '<p class="muted" style="padding:24px;text-align:center">No he podido cargar la página. Comprueba la conexión.</p>'; };
+  setTimeout(() => page.classList.add('listo'), 1500); // por si la imagen tarda: que no quede en blanco
+  im.onerror = () => { colocado = true; scroller.innerHTML = '<p class="muted" style="padding:24px;text-align:center">No he podido cargar la página. Comprueba la conexión.</p>'; };
   viewerEl.querySelector('[data-a=close]').onclick = () => closeBook();
   viewerEl.querySelector('[data-a=in]').onclick = () => setZoom(zoom * 1.4);
   viewerEl.querySelector('[data-a=out]').onclick = () => setZoom(zoom / 1.4);
@@ -762,6 +793,7 @@ function sourceLabel(q) {
 
 // ---------- Resultados ----------
 function showResults() {
+  if (!sess) return;
   const items = sess.items.filter(it => it.chosen !== null);
   const okN = items.filter(it => it.ok).length;
   const score = items.length ? okN / items.length : 0;
@@ -780,20 +812,20 @@ function showResults() {
   let title, mood, msg;
   if (sess.type === 'sim') {
     const passed = simNota >= E.nivel.notaSim;
-    title = passed ? '¡Simulacro aprobado!&nbsp;🎉' : 'Simulacro terminado';
+    title = passed ? '¡Simulacro aprobado!' : 'Simulacro terminado';
     mood = passed ? 'celebrate' : 'think';
     msg = passed ? `¡Has sacado un ${fmtNota(simNota)}! Eso es nivel examen.` : `Has sacado un ${fmtNota(simNota)}. Necesitas un ${fmtNota(E.nivel.notaSim)} para darlo por superado. Repasa los fallos de abajo y vuelve a intentarlo.`;
   } else if (sess.type === 'diag') {
-    title = 'Diagnóstico completado&nbsp;🩺';
+    title = 'Diagnóstico completado';
     mood = 'happy';
     msg = score >= 0.7 ? `¡Partes de un ${pct(score)}%! Ya sabes mucho. Ahora vamos a pulir lo que falta.`
       : `Has acertado un ${pct(score)}%. ¡Perfecto para empezar! Ya sé por dónde tenemos que ir.`;
   } else if (sess.type === 'fallos' && !failedIds().length) {
-    title = '¡Fallos corregidos!&nbsp;🎉';
+    title = '¡Fallos corregidos!';
     mood = 'celebrate';
     msg = 'Has corregido todos tus fallos pendientes. ¡Así se hace! Sigue estudiando para ver temario nuevo.';
   } else {
-    title = score >= 0.8 ? '¡Rondón!&nbsp;🔥' : score >= 0.5 ? '¡Buena ronda!' : 'Ronda terminada';
+    title = score >= 0.8 ? '¡Rondón!' : score >= 0.5 ? '¡Buena ronda!' : 'Ronda terminada';
     mood = score >= 0.5 ? 'happy' : 'talk';
     msg = score >= 0.8 ? `Un ${pct(score)}% de aciertos. ¡Estás que te sales!` : score >= 0.5 ? 'Vas por buen camino. Los fallos te los volveré a preguntar.' : 'Sin agobios: justo para esto estamos. Lo que has fallado volverá hasta que te salga solo.';
   }
@@ -807,18 +839,20 @@ function showResults() {
 
   const seenWrong = new Set();
   const wrong = items.filter(it => !it.ok && !seenWrong.has(it.qid) && seenWrong.add(it.qid));
-  const review = wrong.length ? `
-    <div class="section-title"><h2>${sess.type === 'sim' ? 'Repasa estos fallos' : 'Lo que has fallado'}</h2></div>
-    ${wrong.map(it => {
-      const q = Q[it.qid];
-      return `<div class="card review-item">
+  const fallo = it => {
+    const q = Q[it.qid];
+    return `<div class="card review-item">
         <div class="q">${esc(q.pregunta)}</div>
         <div class="a ko">✗ Tu respuesta: ${esc(q.opciones[it.chosen])}</div>
         <div class="a ok">✓ Correcta: ${esc(q.opciones[q.correcta])}</div>
         <div class="quote">📖&nbsp;${fmtQuote(q.fuente)}<span class="src">${esc(sourceLabel(q))}</span></div>
-        <button class="book-btn" data-q="${esc(q.id)}">🔎 Llévame al libro</button>
+        <button class="book-btn" data-q="${esc(q.id)}">Llévame al libro ›</button>
       </div>`;
-    }).join('')}` : '';
+  };
+  const review = wrong.length ? `
+    <div class="section-title"><h2>${sess.type === 'sim' ? 'Repasa estos fallos' : 'Lo que has fallado'}</h2><span class="muted small">${wrong.length}</span></div>
+    ${wrong.slice(0, 5).map(fallo).join('')}
+    ${wrong.length > 5 ? `<details class="mas"><summary>Ver ${wrong.length - 5 === 1 ? 'el que falta' : `los ${wrong.length - 5} restantes`}</summary>${wrong.slice(5).map(fallo).join('')}</details>` : ''}` : '';
 
   const pending = failedIds().length;
   let again = { practice: 'Otra ronda', diag: 'Empezar a practicar', fallos: 'Seguir repasando fallos', sim: 'Repetir simulacro' }[sess.type];
@@ -839,7 +873,7 @@ function showResults() {
         ${sess.type === 'sim'
           ? `<div class="stat"><b>${fmtNota(simNota)}</b><span>nota</span></div>`
           : `<div class="stat"><b>${pct(score)}%</b><span>aciertos</span></div>`}
-        <div class="stat"><b>+${newlyMastered}</b><span>nuevas sabidas</span></div>
+        ${sess.type === 'diag' ? '' : `<div class="stat"><b>${newlyMastered ? '+' : ''}${newlyMastered}</b><span>nuevas sabidas</span></div>`}
         <div class="stat"><b>${pct(domNow)}%</b><span>dominado</span></div>
       </div>
       <div class="btn-col">
@@ -1133,17 +1167,25 @@ function resumen() {
 function menuCuenta() {
   const u = sesionGuardada()?.user || {};
   modal(`
-    <h2>Tu cuenta</h2>
-    <p class="muted small"><b>${esc(u.nombre || '')}</b><br>${esc(u.email || '')}<br>Tu progreso se guarda en tu cuenta: puedes seguir desde cualquier dispositivo.</p>
-    <button class="btn secondary" data-a="presentacion">👋 Ver la presentación de KAI</button>
-    ${u.admin ? '<button class="btn secondary" data-a="admin">🛠️ Administración</button>' : ''}
-    <button class="btn secondary" data-a="salir">🚪 Cerrar sesión</button>
-    <button class="btn ghost" data-a="close">Cerrar</button>
+    <div class="cuenta-cab">
+      <span class="avatar" aria-hidden="true">${esc((u.nombre || u.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase())}</span>
+      <div><b>${esc(u.nombre || 'Tu cuenta')}</b><span class="muted small">${esc(u.email || '')}</span></div>
+    </div>
+    <p class="muted small">Tu progreso se guarda en tu cuenta: puedes seguir desde cualquier dispositivo.</p>
+    <div class="menu-list">
+      <button data-a="presentacion">Ver la presentación de KAI</button>
+      ${u.admin ? '<button data-a="admin">Administración</button>' : ''}
+      <button class="peligro" data-a="salir">Cerrar sesión</button>
+    </div>
+    <button class="btn ghost" data-a="close">Volver</button>
     <p class="footer">Hecho con 💙 por ${CREATOR} · KAI · versión ${VERSION}</p>`, (el, close) => {
     el.querySelector('[data-a=close]').onclick = close;
     el.querySelector('[data-a=admin]')?.addEventListener('click', () => { close(); showAdmin(); });
     el.querySelector('[data-a=presentacion]').onclick = () => { close(); showPresentacion(0); };
-    el.querySelector('[data-a=salir]').onclick = () => { if (confirm('¿Cerrar sesión en este dispositivo? Tu progreso queda guardado en tu cuenta.')) cerrarSesion(); };
+    el.querySelector('[data-a=salir]').onclick = async () => {
+      close();
+      if (await confirmar({ titulo: '¿Cerrar sesión?', texto: 'Tu progreso queda guardado en tu cuenta.', si: 'Cerrar sesión', peligro: true })) cerrarSesion();
+    };
   });
 }
 
@@ -1164,25 +1206,36 @@ function showLogin(modo = 'entrar') {
       <div class="kai-big">${kaiSVG()}</div>
       <div class="bubble"><p>${crear ? '¡Encantado! Crea tu cuenta y así tu progreso <b>se guarda aunque cambies de móvil</b>&nbsp;💙' : `${hola()}&nbsp;👋 Soy <b>KAI</b>. Entra con tu cuenta para seguir estudiando.`}</p></div>
       <form class="card login" id="login" novalidate>
-        ${crear ? '<label>Tu nombre<input name="name" autocomplete="given-name" required></label>' : ''}
-        <label>Correo<input name="email" type="email" autocomplete="email" inputmode="email" required></label>
-        <label>Contraseña<input name="password" type="password" minlength="8" autocomplete="${crear ? 'new-password' : 'current-password'}" required></label>
+        ${crear ? '<label>Tu nombre<input name="name" autocomplete="given-name" autocapitalize="words" enterkeyhint="next" required></label>' : ''}
+        <label>Correo<input name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" required></label>
+        <label>Contraseña<input name="password" type="password" minlength="8" autocomplete="${crear ? 'new-password' : 'current-password'}" enterkeyhint="go" required>${crear ? '<span class="pista">Mínimo 8 caracteres</span>' : ''}</label>
         <div class="captcha" id="captcha"></div>
         <p class="login-err" role="alert"></p>
         <button class="btn" type="submit">${crear ? 'Crear cuenta' : 'Entrar'}</button>
       </form>
       <button class="btn ghost" id="toggle">${crear ? 'Ya tengo cuenta' : '¿Primera vez? Crea tu cuenta'}</button>
+      ${crear ? '' : '<button class="link-btn" id="olvido">¿Has olvidado la contraseña?</button>'}
     </div>`, 'wave happy');
   app.querySelector('#toggle').onclick = () => showLogin(crear ? 'entrar' : 'crear');
+  app.querySelector('#olvido')?.addEventListener('click', () => modal(`
+    <h2>¿Has olvidado la contraseña?</h2>
+    <p>Escríbenos a <b>e3develops@gmail.com</b> desde el correo de tu cuenta y te ayudamos a recuperarla.</p>
+    <button class="btn" data-a="close">Entendido</button>`, (el, close) => { el.querySelector('[data-a=close]').onclick = close; }));
   const form = app.querySelector('#login');
   form.onsubmit = async e => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
     const err = form.querySelector('.login-err');
     const btn = form.querySelector('button');
-    if (crear && !f.name?.trim()) return (err.textContent = 'Dime cómo te llamas 🙂');
-    if (!f.email || !f.password) return (err.textContent = 'Escribe tu correo y tu contraseña.');
+    const marca = nombre => { form.querySelectorAll('input').forEach(i => i.toggleAttribute('aria-invalid', i.name === nombre)); if (nombre) form.querySelector(`[name=${nombre}]`)?.setAttribute('aria-invalid', 'true'); };
+    if (crear && !f.name?.trim()) { marca('name'); return (err.textContent = 'Dime cómo te llamas 🙂'); }
+    if (!f.email) { marca('email'); return (err.textContent = 'Escribe tu correo.'); }
+    if (!f.password) { marca('password'); return (err.textContent = 'Escribe tu contraseña.'); }
+    if (crear && f.password.length < 8) { marca('password'); return (err.textContent = 'La contraseña tiene que tener al menos 8 caracteres.'); }
+    marca(null);
+    const textoBtn = btn.textContent;
     btn.disabled = true;
+    btn.textContent = crear ? 'Creando tu cuenta…' : 'Entrando…';
     err.textContent = '';
     try {
       const token = await antibots.token();
@@ -1191,8 +1244,9 @@ function showLogin(modo = 'entrar') {
       pantallaCarga('Preparando tus cosas…');
       arrancar();
     } catch (e2) {
-      err.textContent = e2 instanceof SinConexion ? 'No tengo conexión. Inténtalo en un momento.' : (ERRORES[e2.message] || e2.message);
+      err.textContent = e2 instanceof SinConexion ? 'No tengo conexión. Inténtalo en un momento.' : (ERRORES[e2.message] || 'Algo ha fallado. Vuelve a intentarlo en un momento.');
       btn.disabled = false;
+      btn.textContent = textoBtn;
       antibots.reiniciar(); // cada respuesta del antibots vale una sola vez
     }
   };

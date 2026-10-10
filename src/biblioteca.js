@@ -1,7 +1,7 @@
 // Biblioteca: Inicio (qué toca hoy), Asignaturas, Calendario, y crear/editar asignaturas y exámenes.
 // El estudio de cada examen (la KAI de siempre) vive en app.js; aquí solo se abre.
 import { kaiSVG } from './kai.js';
-import { app, esc, render, modal, aviso } from './ui.js';
+import { app, esc, render, modal, aviso, confirmar } from './ui.js';
 import { api, SinConexion, SinSesion } from './api.js';
 import { recomendar, planDe, diasHasta, fmtDias } from './engine/recomendar.js';
 import { fmtNota, nivel as nivelDe, NIVELES } from './engine/nota.js';
@@ -38,7 +38,7 @@ async function conConexion(fn) {
   try { return await fn(); } catch (e) {
     if (e instanceof SinConexion) aviso('Necesitas conexión para esto');
     else if (e instanceof SinSesion) ctx.entrar();
-    else aviso(e.message);
+    else aviso(/^[A-Za-z]/.test(e.message || '') && !/[áéíóúñ¿]/.test(e.message) ? 'Algo ha fallado. Vuelve a intentarlo en un momento.' : e.message);
     return null;
   }
 }
@@ -50,8 +50,9 @@ const pct = x => Math.round((x || 0) * 100);
 const yaPaso = e => e.fecha && diasHasta(e.fecha) < 0;
 
 function tabbar(activa) {
-  const t = (id, ic, txt) => `<button class="tab ${activa === id ? 'on' : ''}" data-tab="${id}"><span class="tab-ic">${ic}</span>${txt}</button>`;
-  return `<nav class="tabbar">${t('inicio', '🏠', 'Inicio')}${t('asignaturas', '📚', 'Asignaturas')}${t('calendario', '📅', 'Calendario')}</nav>`;
+  const svg = d => `<svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const t = (id, ic, txt) => `<button class="tab ${activa === id ? 'on' : ''}" data-tab="${id}" ${activa === id ? 'aria-current="page"' : ''}>${svg(ic)}${txt}</button>`;
+  return `<nav class="tabbar">${t('inicio', '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>', 'Inicio')}${t('asignaturas', '<path d="M4 19.5V5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h13"/><path d="M8 7h7"/>', 'Asignaturas')}${t('calendario', '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>', 'Calendario')}</nav>`;
 }
 function bindComun() {
   app.querySelectorAll('.tabbar [data-tab]').forEach(b => b.onclick = () => ({ inicio: showInicio, asignaturas: showAsignaturas, calendario: () => showCalendario() })[b.dataset.tab]());
@@ -85,14 +86,14 @@ function pintarApuntes(e, info, volver = () => showInicio()) {
   const procesando = e.estado === 'procesando';
   const lista = docs.map(d => `<div class="card doc-fila"><span class="doc-ic">${d.tipo === 'application/pdf' ? '📄' : '🖼️'}</span>
       <span class="doc-txt"><b>${esc(d.nombre)}</b><span class="muted small">${fmtMB(d.bytes)}</span></span>
-      ${procesando ? '' : `<button class="icon-btn" data-borrar="${d.id}" aria-label="Quitar ${esc(d.nombre)}">🗑️</button>`}</div>`).join('');
-  const usado = info ? `<div class="cuota"><div class="bar"><i style="width:${Math.min(100, pct(info.usado / info.limite))}%"></i></div><span class="muted small">Tu espacio: ${fmtMB(info.usado)} de ${fmtMB(info.limite)}</span></div>` : '';
+      ${procesando ? '' : `<button class="icon-btn" data-borrar="${d.id}" aria-label="Quitar ${esc(d.nombre)}">✕</button>`}</div>`).join('');
+  const usado = info && docs.length ? `<div class="cuota"><div class="bar"><i style="width:${Math.min(100, pct(info.usado / info.limite))}%"></i></div><span class="muted small">Tu espacio: ${fmtMB(info.usado)} de ${fmtMB(info.limite)}</span></div>` : '';
   render(`
     <div class="screen lib" id="apuntes">
-      <div class="topbar"><button class="back-link" id="volver">‹ ${esc(asignaturaDe(e)?.nombre || 'Inicio')}</button><button class="icon-btn" id="editar" aria-label="Editar examen">✏️</button></div>
+      <div class="topbar"><button class="back-link" id="volver">‹ ${esc(asignaturaDe(e)?.nombre || 'Inicio')}</button><button class="icon-btn" id="editar" aria-label="Editar examen">✎</button></div>
       <h1>${esc(e.nombre)}</h1>
       <div class="kai-row"><div class="kai-wrap">${kaiSVG()}</div><div class="bubble">${procesando
-        ? '<p>¡Recibido! 📚 Estoy preparando tus preguntas. Te aviso en cuanto estén listas.</p>'
+        ? '<p>¡Recibido! ⏳ Estoy preparando tus preguntas. Te aviso en cuanto estén listas.</p>'
         : '<p>Sube las <b>fotos o PDF</b> de todo lo que entra en el examen. Cuanto más completo, mejores preguntas 💪</p><p class="muted small">Fotos de frente, con buena luz y una página por foto.</p>'}</div></div>
       ${procesando ? '' : `<div class="subir">
         <label class="btn secondary">📷 Hacer fotos<input type="file" accept="image/*" capture="environment" multiple hidden data-subir></label>
@@ -101,7 +102,7 @@ function pintarApuntes(e, info, volver = () => showInicio()) {
       <div id="progreso"></div>
       ${info === null ? '<p class="muted">Cargando…</p>' : docs.length ? `<div class="section-title"><h2>${docs.length} ${docs.length === 1 ? 'archivo' : 'archivos'}</h2></div>${lista}` : '<p class="muted">Aún no has subido nada.</p>'}
       ${usado}
-      ${procesando ? '' : `<button class="btn" id="enviar" ${docs.length ? '' : 'disabled'}>✨ Prepárame este examen</button>`}
+      ${procesando ? '' : `<button class="btn" id="enviar" ${docs.length ? '' : 'disabled'}>Prepárame este examen</button>${docs.length ? '' : '<p class="muted small centro">Sube al menos un archivo para continuar.</p>'}`}
       ${tabbar('asignaturas')}
     </div>`, procesando ? 'happy' : 'talk');
   bindComun();
@@ -109,11 +110,11 @@ function pintarApuntes(e, info, volver = () => showInicio()) {
   app.querySelector('#editar').onclick = () => formExamen(e.asignatura, e);
   app.querySelectorAll('[data-subir]').forEach(inp => inp.onchange = () => subir(e, [...inp.files]));
   app.querySelectorAll('[data-borrar]').forEach(b => b.onclick = async () => {
-    if (!confirm('¿Quitar este archivo?')) return;
+    if (!(await confirmar({ titulo: '¿Quitar este archivo?', si: 'Quitar', peligro: true }))) return;
     if (await conConexion(() => api.borrarDocumento(b.dataset.borrar))) showApuntes(e);
   });
   app.querySelector('#enviar')?.addEventListener('click', async () => {
-    if (!confirm('¿Envío tus apuntes para preparar las preguntas? Mientras tanto no se podrán cambiar.')) return;
+    if (!(await confirmar({ titulo: '¿Preparo tus preguntas?', texto: 'Mientras las preparo no podrás cambiar los apuntes de este examen.', si: 'Sí, prepáralas' }))) return;
     if (!(await conConexion(() => api.enviarExamen(e.id)))) return;
     await cargarBiblioteca();
     showApuntes(LIB.examenes.find(x => x.id === e.id) || e);
@@ -154,8 +155,8 @@ function tarjetaExamen(e, { conAsignatura = true } = {}) {
       <div class="muted small">${p ? `KAI preveía ${fmtRango(p)}${acierto}` : 'Nota apuntada'}</div></div>`;
   }
   if (e.estado !== 'listo') {
-    return `<div class="card lib-ex preparando" data-examen="${e.id}"><div class="lib-ex-top"><b>${nombre}</b><span class="pill info">${e.estado === 'procesando' ? 'preparando' : 'sin apuntes'}</span></div>
-      <div class="muted small">${e.fecha ? `${fmtFecha(e.fecha)} · ` : ''}${e.estado === 'procesando' ? 'Preparando tus preguntas: te aviso cuando estén' : 'Toca para subir tus apuntes'}</div></div>`;
+    return `<div class="card lib-ex preparando" data-examen="${e.id}"><div class="lib-ex-top"><b>${nombre}</b><span class="pill ${e.estado === 'procesando' ? 'info' : 'warn'}">${e.estado === 'procesando' ? 'preparando' : 'faltan apuntes'}</span></div>
+      <div class="muted small">${e.fecha ? `${fmtFecha(e.fecha)} · ` : ''}${e.estado === 'procesando' ? 'Preparando tus preguntas. Te aviso cuando estén listas' : 'Toca para subir tus apuntes'}</div></div>`;
   }
   const chip = dias == null ? '' : dias < 0 ? `<button class="pill warn" data-nota="${e.id}">¿qué nota sacaste?</button>` : `<span class="pill ${dias <= 7 ? 'warn' : ''}">${fmtDias(dias)}</span>`;
   const prev = r && r.respuestas >= 20 ? `nota prevista ${fmtRango(r.rango)} ${why('b-rango', e.id)}` : r && r.respuestas > 0 ? 'calculando tu nota…' : 'sin empezar';
@@ -170,7 +171,7 @@ export async function showInicio() {
   const rec = recomendar(LIB.examenes);
   const ex = LIB.examenes;
   const sinNota = ex.filter(e => e.estado === 'listo' && e.notaReal == null && yaPaso(e));
-  const proximos = ex.filter(e => e.notaReal == null && !yaPaso(e))
+  const proximos = ex.filter(e => e.notaReal == null && !yaPaso(e) && e.id !== rec?.examen.id)
     .sort((a, b) => (a.fecha || '9999') < (b.fecha || '9999') ? -1 : 1);
   const nombre = ctx.nombre();
   let bocadillo, mood = 'talk';
@@ -181,8 +182,8 @@ export async function showInicio() {
   } else if (rec) {
     const a = asignaturaDe(rec.examen);
     bocadillo = `<p>${nombre ? `${esc(nombre)}, te` : 'Te'} recomiendo que le metamos caña a <b>${a ? `${esc(a.nombre)} · ` : ''}${esc(rec.examen.nombre)}</b> ${why('b-rec')}</p>
-      <p class="muted small">${rec.examen.fecha ? `Es ${fmtDias(diasHasta(rec.examen.fecha))} · ` : ''}unos ${rec.minutosHoy} min hoy</p>
-      <button class="btn" data-examen="${rec.examen.id}">Empezar</button>`;
+      ${rec.examen.fecha ? `<p class="muted small">Es ${fmtDias(diasHasta(rec.examen.fecha))}</p>` : ''}
+      <button class="btn" data-examen="${rec.examen.id}">Empezar · ${rec.minutosHoy} min</button>`;
   } else if (ex.some(e => e.estado !== 'listo')) {
     bocadillo = '<p>En cuanto tus apuntes estén listos te digo por dónde empezar 💪</p>'; mood = 'think';
   } else {
@@ -197,7 +198,7 @@ export async function showInicio() {
       <div class="kai-row"><div class="kai-wrap">${kaiSVG()}</div><div class="bubble">${bocadillo}</div></div>
       ${ex.filter(e => e.listoAviso && e.estado === 'listo').map(e => `<div class="card listo-card"><b>🎉 ¡Tus apuntes de ${esc(e.nombre)} ya están listos!</b><span class="muted small">He preparado ${e.preguntas ? `${e.preguntas} preguntas` : 'tus preguntas'} con ellos. ¿Empezamos?</span><button class="btn" data-examen="${e.id}">¡Vamos!</button></div>`).join('')}
       ${sinNota.map(e => `<div class="card nota-card"><b>¿Qué tal ${esc(e.nombre)}?</b><span class="muted small">Fue el ${fmtFecha(e.fecha)}. Apunta tu nota y así afino mis previsiones.</span><button class="btn secondary" data-nota="${e.id}">Apuntar mi nota</button></div>`).join('')}
-      ${proximos.length ? `<div class="section-title"><h2>Próximos exámenes</h2></div>${proximos.map(e => tarjetaExamen(e)).join('')}` : ''}
+      ${proximos.length ? `<div class="section-title"><h2>${rec ? 'Otros exámenes' : 'Próximos exámenes'}</h2></div>${proximos.map(e => tarjetaExamen(e)).join('')}` : ''}
       ${tabbar('inicio')}
     </div>`, mood);
   bindComun();
@@ -238,14 +239,15 @@ function bindAsignaturas() {
 export function showAsignatura(id) {
   const a = id ? LIB.asignaturas.find(x => x.id === id) : { id: null, nombre: 'Sin asignatura', emoji: '🗂️', color: 'gris' };
   if (!a) return showAsignaturas();
-  const lista = examenesDe(id).sort((x, y) => (x.fecha || '9999') < (y.fecha || '9999') ? -1 : 1);
+  const hecho = x => x.notaReal != null || yaPaso(x);
+  const lista = examenesDe(id).sort((x, y) => hecho(x) - hecho(y) || ((x.fecha || '9999') < (y.fecha || '9999') ? -1 : 1));
   const aprobados = lista.filter(e => e.notaReal >= 5).length;
   render(`
     <div class="screen lib">
-      <div class="topbar"><button class="back-link" id="volver">‹ Asignaturas</button>${id ? '<button class="icon-btn" id="editar" aria-label="Editar asignatura">✏️</button>' : ''}</div>
+      <div class="topbar"><button class="back-link" id="volver">‹ Asignaturas</button>${id ? '<button class="icon-btn" id="editar" aria-label="Editar asignatura">✎</button>' : ''}</div>
       <div class="asig-head c-${a.color}"><span class="asig-emoji grande">${a.emoji}</span><div><h1>${esc(a.nombre)}</h1>
         <div class="muted small">${lista.length} ${lista.length === 1 ? 'examen' : 'exámenes'}${aprobados ? ` · ${aprobados} aprobado${aprobados > 1 ? 's' : ''}` : ''}</div></div></div>
-      <div class="section-title"><h2>Preparación de exámenes</h2></div>
+      <div class="section-title"><h2>Exámenes</h2></div>
       ${lista.length ? lista.map(e => tarjetaExamen(e, { conAsignatura: false })).join('') : '<p class="muted">Aún no hay exámenes. Crea el primero y pon su fecha: así sabré cuánto tiempo tenemos.</p>'}
       <button class="nuevo" id="nuevo-ex">＋ Nuevo examen</button>
       ${tabbar('asignaturas')}
@@ -254,8 +256,6 @@ export function showAsignatura(id) {
   app.querySelector('#volver').onclick = showAsignaturas;
   app.querySelector('#editar')?.addEventListener('click', () => formAsignatura(a));
   app.querySelector('#nuevo-ex').onclick = () => formExamen(id);
-  // Mantener pulsado (o clic derecho) un examen para editarlo
-  app.querySelectorAll('.lib-ex').forEach(el => el.addEventListener('contextmenu', ev => { ev.preventDefault(); formExamen(id, LIB.examenes.find(x => x.id === el.dataset.examen)); }));
 }
 
 // ---------- Crear / editar asignatura ----------
@@ -265,6 +265,7 @@ function formAsignatura(a = null) {
     <div class="screen lib">
       <div class="topbar"><button class="back-link" id="volver">✕ Cancelar</button></div>
       <h1>${a ? 'Editar asignatura' : 'Nueva asignatura'}</h1>
+      <div class="asig-prev c-${color}"><span class="asig-emoji grande">${emoji}</span></div>
       <form class="form" id="f" novalidate>
         <label>Nombre<input name="nombre" maxlength="60" placeholder="Biología" value="${esc(a?.nombre || '')}" autocomplete="off" required></label>
         <div class="campo"><span>Icono</span><div class="emojis">${EMOJIS.map(x => `<button type="button" class="emoji ${x === emoji ? 'on' : ''}" data-emoji="${x}">${x}</button>`).join('')}</div></div>
@@ -276,8 +277,9 @@ function formAsignatura(a = null) {
     </div>`);
   const f = app.querySelector('#f');
   app.querySelector('#volver').onclick = () => (a ? showAsignatura(a.id) : showAsignaturas());
-  f.querySelectorAll('[data-emoji]').forEach(b => b.onclick = () => { emoji = b.dataset.emoji; f.querySelectorAll('.emoji').forEach(x => x.classList.toggle('on', x === b)); });
-  f.querySelectorAll('[data-color]').forEach(b => b.onclick = () => { color = b.dataset.color; f.querySelectorAll('.color').forEach(x => x.classList.toggle('on', x === b)); });
+  const prev = app.querySelector('.asig-prev');
+  f.querySelectorAll('[data-emoji]').forEach(b => b.onclick = () => { emoji = b.dataset.emoji; prev.firstElementChild.textContent = emoji; f.querySelectorAll('.emoji').forEach(x => x.classList.toggle('on', x === b)); });
+  f.querySelectorAll('[data-color]').forEach(b => b.onclick = () => { color = b.dataset.color; prev.className = `asig-prev c-${color}`; f.querySelectorAll('.color').forEach(x => x.classList.toggle('on', x === b)); });
   f.onsubmit = async e => {
     e.preventDefault();
     const nombre = f.nombre.value.trim();
@@ -289,7 +291,7 @@ function formAsignatura(a = null) {
     showAsignatura(a ? a.id : r.id);
   };
   f.querySelector('#borrar')?.addEventListener('click', async () => {
-    if (!confirm(`¿Borrar ${a.nombre}? Sus exámenes no se borran: pasan a "Sin asignatura".`)) return;
+    if (!(await confirmar({ titulo: `¿Borrar ${esc(a.nombre)}?`, texto: 'Sus exámenes no se borran: pasan a «Sin asignatura».', si: 'Borrar', peligro: true }))) return;
     if (!(await conConexion(() => api.borrarAsignatura(a.id)))) return;
     await cargarBiblioteca();
     showAsignaturas();
@@ -306,13 +308,14 @@ export function formExamen(asignaturaId, e = null) {
   const asig = LIB.asignaturas.find(x => x.id === asignaturaId);
   render(`
     <div class="screen lib">
-      <div class="topbar"><button class="back-link" id="volver">✕ Cancelar</button><span class="muted small">${esc(asig?.nombre || '')}</span></div>
+      <div class="topbar"><button class="back-link" id="volver">✕ Cancelar</button></div>
       <h1>${e ? 'Editar examen' : 'Nuevo examen'}</h1>
+      ${asig ? `<p class="muted small sub-h1">${asig.emoji} ${esc(asig.nombre)}</p>` : ''}
       <form class="form" id="f" novalidate>
         <label>Nombre<input name="nombre" maxlength="80" placeholder="Tema 1 · La célula" value="${esc(e?.nombre || '')}" autocomplete="off" required></label>
-        <label>Fecha del examen<input name="fecha" type="date" value="${esc(e?.fecha || '')}"></label>
+        <label>Fecha del examen<input name="fecha" type="date" class="${e?.fecha ? '' : 'vacio'}" value="${esc(e?.fecha || '')}"></label>
         <div class="campo"><span>Opciones por pregunta</span>${seg('opciones', [[3, '3'], [4, '4'], [5, '5']], opciones)}</div>
-        <div class="campo"><span>¿Restan los fallos? ${why('b-resta')}</span>${seg('resta', [['no', 'No'], ['si', 'Sí, 1 de cada ' + (opciones - 1)], ['nose', 'No lo sé']], resta)}</div>
+        <div class="campo"><span>¿Restan los fallos? ${why('b-resta')}</span>${seg('resta', [['no', 'No'], ['si', `Sí <small>−1/${opciones - 1} por fallo</small>`], ['nose', 'No lo sé']], resta)}</div>
         <div class="campo"><span>Nivel ${why('b-niveles')}</span>${seg('nivel', Object.values(NIVELES).map(n => [n.id, `${n.nombre} <small>${n.promete}</small>`]), nivel)}</div>
         ${e ? '' : '<p class="muted small">Después subes tus apuntes (fotos o PDF) y yo preparo las preguntas.</p>'}
         <p class="form-err" role="alert"></p>
@@ -323,9 +326,10 @@ export function formExamen(asignaturaId, e = null) {
   const f = app.querySelector('#f');
   const volver = () => showAsignatura(asignaturaId || null);
   app.querySelector('#volver').onclick = volver;
+  f.fecha.addEventListener('input', () => f.fecha.classList.toggle('vacio', !f.fecha.value));
   f.querySelectorAll('[data-seg] [data-v]').forEach(b => b.onclick = () => {
     const g = b.closest('[data-seg]').dataset.seg;
-    if (g === 'opciones') { opciones = Number(b.dataset.v); f.querySelector('[data-seg=resta] [data-v=si]').textContent = `Sí, 1 de cada ${opciones - 1}`; }
+    if (g === 'opciones') { opciones = Number(b.dataset.v); f.querySelector('[data-seg=resta] [data-v=si]').innerHTML = `Sí <small>−1/${opciones - 1} por fallo</small>`; }
     if (g === 'resta') resta = b.dataset.v;
     if (g === 'nivel') nivel = b.dataset.v;
     b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
@@ -346,7 +350,7 @@ export function formExamen(asignaturaId, e = null) {
     volver();
   };
   f.querySelector('#borrar')?.addEventListener('click', async () => {
-    if (!confirm(`¿Borrar ${e.nombre}? Se borrará también tu progreso en este examen.`)) return;
+    if (!(await confirmar({ titulo: `¿Borrar ${esc(e.nombre)}?`, texto: 'También se borrará tu progreso en este examen.', si: 'Borrar', peligro: true }))) return;
     if (!(await conConexion(() => api.borrarExamen(e.id)))) return;
     await cargarBiblioteca();
     volver();
@@ -359,7 +363,7 @@ function pedirNota(e) {
   modal(`
     <div class="kai-row"><div class="kai-wrap">${kaiSVG('think')}</div><div class="bubble">¿Qué tal <b>${esc(e.nombre)}</b>? ¿Qué nota sacaste?</div></div>
     <form class="form" id="fn" novalidate>
-      <label>Tu nota (de 0 a 10)<input name="nota" type="number" inputmode="decimal" min="0" max="10" step="0.05" placeholder="7,5" required></label>
+      <label>Tu nota (de 0 a 10)<input name="nota" type="text" inputmode="decimal" autocomplete="off" placeholder="7,5" required></label>
       <p class="form-err" role="alert"></p>
       <button class="btn" type="submit">Guardar nota</button>
     </form>
@@ -405,20 +409,21 @@ export function showCalendario(delta = null) {
   const titulo = new Intl.DateTimeFormat('es-ES', { month: 'long', year: ini.getFullYear() !== hoy.getFullYear() ? 'numeric' : undefined }).format(ini);
   render(`
     <div class="screen lib">
-      <div class="topbar"><h1 class="cap">${titulo}</h1><div class="mes-nav"><button class="icon-btn" id="prev" aria-label="Mes anterior">‹</button><button class="icon-btn" id="next" aria-label="Mes siguiente">›</button></div></div>
+      <div class="topbar"><h1 class="cap">${titulo}</h1><div class="mes-nav">${mesVisto ? '<button class="pill" id="hoy">Hoy</button>' : ''}<button class="icon-btn" id="prev" aria-label="Mes anterior">‹</button><button class="icon-btn" id="next" aria-label="Mes siguiente">›</button></div></div>
       <div class="card cal"><div class="cal-grid">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(x => `<b>${x}</b>`).join('')}${celdas.join('')}</div></div>
-      <div class="section-title"><h2>${mesVisto === 0 ? 'Este mes' : 'Exámenes del mes'}</h2></div>
+      <div class="section-title"><h2>Exámenes de ${titulo.split(' ')[0]}</h2></div>
       ${delMes.length ? delMes.map(e => {
         const a = asignaturaDe(e); const p = planDe(e); const dias = diasHasta(e.fecha);
-        const plan = e.notaReal != null ? `Sacaste un ${fmtNota(e.notaReal)}` : dias < 0 ? 'Ya pasó' : e.estado !== 'listo' ? 'Aún sin apuntes preparados'
+        const plan = e.notaReal != null ? `Sacaste un ${fmtNota(e.notaReal)}` : dias < 0 ? 'Ya pasó' : e.estado === 'procesando' ? 'Preparando tus preguntas' : e.estado !== 'listo' ? 'Falta subir los apuntes'
           : p.listo ? '¡A punto! Un repaso corto de vez en cuando' : `Plan: ${p.minutosDia} min al día para llegar a ${nivelDe(e.nivel).nombre} ${why('b-plan', e.id)}`;
-        return `<div class="card lib-ex" data-examen="${e.id}"><div class="lib-ex-top"><b>${fmtFecha(e.fecha, { day: 'numeric' })} · ${a ? `${esc(a.nombre)} · ` : ''}${esc(e.nombre)}</b><span class="muted small">${dias >= 0 ? fmtDias(dias) : ''}</span></div><div class="muted small">${plan}</div></div>`;
+        return `<div class="card lib-ex" data-examen="${e.id}"><div class="lib-ex-top"><b>${fmtFecha(e.fecha, { day: 'numeric' })} · ${a ? `${esc(a.nombre)} · ` : ''}${esc(e.nombre)}</b>${dias >= 0 ? `<span class="pill ${dias <= 7 ? 'warn' : ''}">${fmtDias(dias)}</span>` : ''}</div><div class="muted small">${plan}</div></div>`;
       }).join('') : '<p class="muted">No hay exámenes este mes.</p>'}
       ${tabbar('calendario')}
     </div>`);
   bindComun();
   app.querySelector('#prev').onclick = () => showCalendario(mesVisto - 1);
   app.querySelector('#next').onclick = () => showCalendario(mesVisto + 1);
+  app.querySelector('#hoy')?.addEventListener('click', () => showCalendario(0));
 }
 
 // ---------- Los "?" de la biblioteca ----------
