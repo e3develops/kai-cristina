@@ -3,6 +3,7 @@ import { app, esc, render, modal, guardTaps, onRender, aviso } from './ui.js';
 import { needsInstallHelp, inAppBrowser, isIPad, art1, artMore, art2, art3, art4 } from './installart.js';
 import { CREADOR, VERSION } from './config.js';
 import { api, SinConexion, SinSesion, sesionGuardada, guardarSesion, olvidarSesion } from './api.js';
+import { enPrincipal, hayBloqueo, irAReserva } from './reserva.js';
 import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, DIAG_LEN, SIM_LEN, MIN_FORECAST } from './engine/motor.js';
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
 import { fmtNota, describeFormato } from './engine/nota.js';
@@ -968,12 +969,46 @@ const pantallaError = (txt, sub) => render(`<div class="screen loading"><div><di
 
 async function init() {
   pantallaCarga('KAI se está encendiendo…', 'Comprobando si hay novedades');
-  const [latest] = await Promise.all([latestVersion(), new Promise(r => setTimeout(r, 600))]);
+  const [latest, bloqueo] = await Promise.all([latestVersion(), enPrincipal ? hayBloqueo() : false, new Promise(r => setTimeout(r, 600))]);
+  if (bloqueo) return showBloqueo();
   if (latest && latest !== VERSION && await applyUpdate(latest)) return;
   try { navigator.storage?.persist?.(); } catch (e) { /* opcional */ }
   // En iPhone, primero instalarla: Safari y la app instalada no comparten la sesión
   if (needsInstallHelp() && !browserAllowed()) return showInstallGate(0);
   arrancar();
+}
+
+// La dirección principal está bloqueada (pasa con los bloqueos de IPs de LaLiga): a la de reserva.
+// Si ya había sesión en este móvil, se puede elegir seguir aquí sin conexión.
+function showBloqueo() {
+  const conSesion = !!sesionGuardada()?.user;
+  let quedan = conSesion ? 8 : 4;
+  render(`
+    <div class="screen onb">
+      <div class="kai-big">${kaiSVG()}</div>
+      <div class="bubble">
+        <p>Uy, tu compañía de internet está <b>bloqueando mi dirección</b> 😤 (suele pasar mientras hay fútbol).</p>
+        <p>No pasa nada: tengo una <b>dirección de reserva</b>, con tu misma cuenta y tus mismos datos. ${conSesion ? 'Allí tendrás que entrar una vez con tu correo y tu contraseña.' : ''}</p>
+        <p class="muted small">Te llevo en <b id="cuenta-atras">${quedan}</b> s…</p>
+      </div>
+      <div class="btn-col">
+        <button class="btn" id="ir">Ir a la dirección de reserva</button>
+        ${conSesion ? '<button class="btn ghost" id="quedarme">Seguir aquí sin conexión</button>' : ''}
+      </div>
+    </div>`, 'think');
+  const reloj = setInterval(() => {
+    quedan--;
+    const el = document.getElementById('cuenta-atras');
+    if (!el) return clearInterval(reloj);
+    el.textContent = quedan;
+    if (quedan <= 0) { clearInterval(reloj); irAReserva(); }
+  }, 1000);
+  app.querySelector('#ir').onclick = () => { clearInterval(reloj); irAReserva(); };
+  app.querySelector('#quedarme')?.addEventListener('click', () => {
+    clearInterval(reloj);
+    if (needsInstallHelp() && !browserAllowed()) return showInstallGate(0);
+    arrancar();
+  });
 }
 
 // Sesión → examen → preguntas → progreso (del móvil + de la cuenta) → inicio

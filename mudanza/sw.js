@@ -1,6 +1,6 @@
 // Service worker de la dirección antigua: sustituye al de la KAI vieja y deja guardada la página
 // de mudanza, para que se siga viendo aunque esta dirección deje de existir.
-const CACHE = 'kai-mudanza';
+const CACHE = 'kai-mudanza-2'; // cambiar el número al tocar la página: así se refresca en los móviles
 const PAGINA = ['./', 'index.html', 'kai.png'];
 
 self.addEventListener('install', e => {

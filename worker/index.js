@@ -10,6 +10,9 @@ const app = new Hono();
 // Better Auth: registro, inicio y cierre de sesión…
 app.on(['GET', 'POST'], '/api/auth/*', c => crearAuth(c.env, c.req.raw).handler(c.req.raw));
 
+// ¿Está vivo el servidor? (la app lo usa para detectar bloqueos de IPs; nunca se guarda en caché)
+app.get('/api/ping', c => c.json({ ok: true }));
+
 // Configuración pública (antes de entrar): la clave pública del antibots
 app.get('/api/config', c => c.json({ turnstile: c.env.TURNSTILE_SECRET ? c.env.TURNSTILE_SITEKEY || null : null }));
 
