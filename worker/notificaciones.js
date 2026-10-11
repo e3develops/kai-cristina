@@ -20,6 +20,14 @@ export function registrarNotificaciones(app) {
     ]);
     return c.json({ notificaciones: lista.results.map(x => ({ ...x, leida: !!x.leida })), sinLeer: n.results[0].n });
   });
+  app.delete('/api/notificaciones/:id', async c => {
+    await c.env.DB.prepare('delete from notificacion where id = ? and user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+    return c.json({ ok: true });
+  });
+  app.delete('/api/notificaciones', async c => {
+    await c.env.DB.prepare('delete from notificacion where user_id = ?').bind(c.get('user').id).run();
+    return c.json({ ok: true });
+  });
   app.post('/api/notificaciones/leidas', async c => {
     await c.env.DB.prepare('update notificacion set leida = 1 where user_id = ? and leida = 0').bind(c.get('user').id).run();
     return c.json({ ok: true });
@@ -33,6 +41,8 @@ const CUANDO = { 1: 'mañana', 3: 'en 3 días', 7: 'en una semana' };
 
 export async function recordatoriosDiarios(env) {
   const hoy = hoyMadrid();
+  // Limpieza: las ya leídas de hace más de 30 días desaparecen solas
+  await env.DB.prepare('delete from notificacion where leida = 1 and creado < ?').bind(Date.now() - 30 * 864e5).run();
   // Exámenes que se acercan (preparados y sin nota aún)
   for (const dias of [1, 3, 7]) {
     const { results } = await env.DB.prepare(`select e.id, e.user_id, e.nombre, p.resumen from examen e

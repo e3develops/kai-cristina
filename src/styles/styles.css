@@ -769,3 +769,9 @@ details.mas > .card { margin-top: 12px; }
 .form select { -webkit-appearance: none; appearance: none; min-height: 52px; font-weight: 700; }
 .form textarea:focus, .form select:focus { outline: none; border-color: var(--primary); }
 .form select { padding-right: 42px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%235B7378' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 16px center; }
+/* Deslizar para borrar notificaciones */
+.noti-wrap { position: relative; border-radius: var(--radius); overflow: hidden; transition: height var(--dur-3) var(--ease-in-out), opacity var(--dur-3) var(--ease-in-out), margin var(--dur-3) var(--ease-in-out); }
+.noti-wrap.fuera { height: 0 !important; opacity: 0; margin-bottom: -10px; }
+.noti-borrar { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 22px; background: var(--ko); color: #fff; font-weight: 800; font-size: 15px; border-radius: var(--radius); opacity: calc(.35 + var(--tirar, 0) * .65); }
+.noti { touch-action: pan-y; transition: transform var(--dur-3) var(--ease-out); margin: 0; }
+.noti.arrastrando { transition: none; }

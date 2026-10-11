@@ -220,22 +220,75 @@ export async function showNotificaciones() {
       <div class="topbar"><button class="back-link" id="volver">‹ Inicio</button></div>
       <h1>Notificaciones</h1>
       ${ofrecerAvisos('¿Quieres recibirlas también en el móvil?')}
-      ${lista.length ? `<div class="notis">${lista.map(x => `<button class="card noti ${x.leida ? '' : 'nueva'}" ${x.url ? `data-url="${esc(x.url)}"` : ''}>
+      ${lista.length ? `<div class="notis">${lista.map(x => `<div class="noti-wrap" data-id="${esc(x.id)}"><span class="noti-borrar" aria-hidden="true">Eliminar</span>
+          <button class="card noti ${x.leida ? '' : 'nueva'}" ${x.url ? `data-url="${esc(x.url)}"` : ''}>
           <span class="noti-ic" aria-hidden="true">${ICONO_TIPO[x.tipo] || '🔔'}</span>
           <span class="noti-txt"><b>${esc(x.titulo)}</b><span>${esc(x.texto)}</span><small>${haceCuanto(x.creado)}</small></span>
-        </button>`).join('')}</div>`
+        </button></div>`).join('')}</div>
+        <p class="muted small centro">Desliza una notificación hacia la izquierda para borrarla.</p>
+        <button class="btn ghost" id="borrar-todas">Borrar todas</button>`
         : '<div class="vacio-card"><div class="vacio-ic">🔔</div><p class="muted">Aquí te avisaré cuando tus preguntas estén listas, cuando se acerque un examen o si te escribimos.</p></div>'}
       ${tabbar('inicio')}
     </div>`);
   bindComun();
   bindAvisos();
   app.querySelector('#volver').onclick = showInicio;
-  app.querySelectorAll('.noti[data-url]').forEach(b => b.onclick = () => ctx.abrirUrl(new URL(b.dataset.url, location.origin)));
+  app.querySelectorAll('.noti[data-url]').forEach(b => b.onclick = () => { if (!b.dataset.deslizada) ctx.abrirUrl(new URL(b.dataset.url, location.origin)); });
+  app.querySelectorAll('.noti-wrap').forEach(deslizarParaBorrar);
+  app.querySelector('#borrar-todas')?.addEventListener('click', async () => {
+    if (!(await confirmar({ titulo: '¿Borrar todas las notificaciones?', si: 'Borrar todas', peligro: true }))) return;
+    if (await conConexion(() => api.borrarNotificaciones()) === null) return;
+    LIB.notis = { notificaciones: [], sinLeer: 0 };
+    showNotificaciones();
+  });
   // Al verlas, quedan leídas (el punto rojo desaparece la próxima vez)
   if (LIB.notis.sinLeer) {
     api.notificacionesLeidas().catch(() => {});
     LIB.notis = { ...LIB.notis, sinLeer: 0, notificaciones: lista.map(x => ({ ...x, leida: true })) };
   }
+}
+
+// Deslizar una notificación hacia la izquierda la borra (con el dedo o con el ratón)
+function deslizarParaBorrar(wrap) {
+  const card = wrap.querySelector('.noti');
+  let x0 = null, y0 = 0, dx = 0, horizontal = null;
+  const soltar = () => {
+    if (x0 === null) return;
+    x0 = null;
+    card.classList.remove('arrastrando');
+    if (horizontal && dx < -wrap.offsetWidth * 0.35) return borrar();
+    card.style.transform = '';
+    wrap.style.setProperty('--tirar', 0);
+    setTimeout(() => delete card.dataset.deslizada, 50);
+  };
+  const borrar = () => {
+    card.style.transform = 'translateX(-110%)';
+    wrap.style.height = `${wrap.offsetHeight}px`;
+    requestAnimationFrame(() => wrap.classList.add('fuera'));
+    setTimeout(() => {
+      wrap.remove();
+      LIB.notis = { ...LIB.notis, notificaciones: LIB.notis.notificaciones.filter(n => n.id !== wrap.dataset.id) };
+      if (!LIB.notis.notificaciones.length) showNotificaciones();
+    }, 320);
+    api.borrarNotificacion(wrap.dataset.id).catch(() => aviso('No he podido borrarla: sin conexión'));
+  };
+  card.addEventListener('pointerdown', e => { x0 = e.clientX; y0 = e.clientY; dx = 0; horizontal = null; });
+  card.addEventListener('pointermove', e => {
+    if (x0 === null) return;
+    dx = Math.min(0, e.clientX - x0);
+    if (horizontal === null && (Math.abs(e.clientX - x0) > 8 || Math.abs(e.clientY - y0) > 8)) {
+      horizontal = Math.abs(e.clientX - x0) > Math.abs(e.clientY - y0);
+      if (!horizontal) return (x0 = null); // es un scroll vertical: no tocar
+      card.setPointerCapture(e.pointerId);
+      card.classList.add('arrastrando');
+      card.dataset.deslizada = '1';
+    }
+    if (!horizontal) return;
+    card.style.transform = `translateX(${dx}px)`;
+    wrap.style.setProperty('--tirar', Math.min(1, -dx / (wrap.offsetWidth * 0.35)));
+  });
+  card.addEventListener('pointerup', soltar);
+  card.addEventListener('pointercancel', soltar);
 }
 
 // ---------- Avisos al móvil: ofrecerlos (sin insistir: "Ahora no" lo aparca una semana) ----------
