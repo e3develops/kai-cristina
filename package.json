@@ -9,7 +9,7 @@
     "build": "vite build && node --check dist/sw.js",
     "preview": "vite preview",
     "test": "node --test",
-    "deploy": "npm test && vite build && wrangler d1 migrations apply kai --remote && wrangler deploy && npm run deploy:reserva",
+    "deploy": "npm test && npm run build && wrangler d1 migrations apply kai --remote && wrangler deploy && npm run deploy:reserva",
     "deploy:reserva": "cd reserva && node ../node_modules/wrangler/bin/wrangler.js pages deploy --branch main --commit-dirty=true --force"
   },
   "devDependencies": {
