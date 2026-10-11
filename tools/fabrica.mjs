@@ -153,11 +153,10 @@ async function avisarListo(local, eid, n) {
     todas: uid => sql(`select endpoint, p256dh, auth from push where user_id = '${uid.replace(/'/g, "''")}'`, local),
     borrar: endpoint => sql(`delete from push where endpoint = '${endpoint.replace(/'/g, "''")}'`, local),
   };
-  const r = await avisarUsuario(db, ex.user_id, {
-    titulo: '¡Tus preguntas están listas! 🎉',
-    texto: `He preparado ${n} preguntas de «${ex.nombre}». ¿Empezamos?`,
-    url: `/?examen=${eid}`,
-  }, { jwk: JSON.parse(readFileSync(fichero, 'utf8')) });
+  const aviso = { titulo: '¡Tus preguntas están listas! 🎉', texto: `He preparado ${n} preguntas de «${ex.nombre}». ¿Empezamos?`, url: `/?examen=${eid}` };
+  const q = s => `'${String(s).replace(/'/g, "''")}'`;
+  sql(`insert or ignore into notificacion (id, user_id, tipo, titulo, texto, url, clave, creado) values (${q(crypto.randomUUID())}, ${q(ex.user_id)}, 'listo', ${q(aviso.titulo)}, ${q(aviso.texto)}, ${q(aviso.url)}, ${q(`listo-${eid}-${Date.now()}`)}, ${Date.now()})`, local);
+  const r = await avisarUsuario(db, ex.user_id, aviso, { jwk: JSON.parse(readFileSync(fichero, 'utf8')) });
   console.log(r.dispositivos ? `📲 Aviso enviado a ${r.entregados} de ${r.dispositivos} dispositivos` : '📵 El usuario no tiene los avisos activados');
 }
 

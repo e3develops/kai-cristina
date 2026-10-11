@@ -8,7 +8,7 @@ import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, D
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
 import { fmtNota, describeFormato } from './engine/nota.js';
 import { why, explicacion, fmtRango } from './porque.js';
-import { configurarBiblioteca, cargarBiblioteca, showInicio, showAsignatura, formExamen, showAdmin, explicarBiblioteca, olvidarBiblioteca, refrescarBiblioteca, hayPreparando, abrirDesdeAviso } from './biblioteca.js';
+import { configurarBiblioteca, cargarBiblioteca, showInicio, showAsignatura, formExamen, showAdmin, explicarBiblioteca, olvidarBiblioteca, refrescarBiblioteca, hayPreparando, abrirDesdeAviso, showNotificaciones } from './biblioteca.js';
 import { sincronizarAvisos, olvidarAvisos, escucharAvisos, permisoAvisos, activarAvisos } from './avisos.js';
 
 // ------------------------------------------------------------------
@@ -1063,6 +1063,7 @@ async function arrancar() {
     abrirExamen, nombre: () => NAME, menuCuenta,
     iniciales: () => (sesion.user.nombre || sesion.user.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase(),
     entrar: () => showLogin(),
+    abrirUrl: url => abrirPedido(url),
   });
   sincronizarAvisos();
   let prefs = null;
@@ -1076,7 +1077,9 @@ async function arrancar() {
 function abrirPedido(url) {
   const id = url.searchParams.get('examen');
   if (id) return abrirDesdeAviso(id);
-  if (url.searchParams.has('admin') && sesionGuardada()?.user?.admin) showAdmin();
+  if (url.searchParams.has('admin') && sesionGuardada()?.user?.admin) return showAdmin({ tab: 'solicitudes' });
+  if (url.searchParams.has('avisos')) return showNotificaciones();
+  if (url.pathname === '/' && !url.search) return showInicio();
 }
 // Refresco automático: al llegar un aviso, al volver a la app y cada minuto mientras se preparan apuntes
 escucharAvisos({ alLlegar: () => refrescarBiblioteca(), alAbrir: abrirPedido });

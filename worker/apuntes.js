@@ -2,7 +2,7 @@
 import { LIMITES, TIPOS, motivoRechazo } from './limites.js';
 import { avisarAdmin, avisarUnaVezAlDia } from './avisos.js';
 import { esAdmin } from './auth.js';
-import { avisarAlAdmin } from './avisospush.js';
+import { notificarAdmin } from './notificaciones.js';
 
 const docJson = d => ({ id: d.id, nombre: d.nombre, tipo: d.tipo, bytes: d.bytes, creado: d.creado });
 
@@ -78,7 +78,7 @@ export function registrarApuntes(app) {
     const u = c.get('user');
     c.executionCtx.waitUntil(avisarAdmin(c.env, `KAI: apuntes nuevos de ${u.name}`,
       `${u.name} (${u.email}) ha enviado apuntes para preparar.\n\nExamen: ${ex.nombre}${ex.fecha ? ` (el ${ex.fecha})` : ''}\nArchivos: ${docs.n} (${Math.round(docs.b / 1024 / 1024 * 10) / 10} MB)\nId: ${ex.id}\n\nPara procesarlo: node tools/fabrica.mjs descargar ${ex.id}`));
-    c.executionCtx.waitUntil(avisarAlAdmin(c.env, { titulo: 'KAI · apuntes nuevos', texto: `${u.name} ha enviado «${ex.nombre}» (${docs.n} ${docs.n === 1 ? 'archivo' : 'archivos'})`, url: '/?admin' }));
+    c.executionCtx.waitUntil(notificarAdmin(c.env, { titulo: 'Apuntes nuevos por preparar', texto: `${u.name} ha enviado «${ex.nombre}» (${docs.n} ${docs.n === 1 ? 'archivo' : 'archivos'})`, clave: `enviado-${ex.id}-${Date.now()}` }));
     return c.json({ ok: true });
   });
 
@@ -101,7 +101,7 @@ export function registrarApuntes(app) {
   app.get('/api/admin/resumen', async c => {
     if (!esAdmin(c.env, c.get('user'))) return c.json({ error: 'No existe' }, 404);
     const [p, g, us] = await c.env.DB.batch([
-      c.env.DB.prepare(`select e.id, e.nombre, e.fecha, e.enviado, u.name as usuario, u.email,
+      c.env.DB.prepare(`select e.id, e.nombre, e.fecha, e.enviado, e.user_id as usuarioId, u.name as usuario, u.email,
         (select count(*) from documento d where d.examen_id = e.id) as archivos,
         (select coalesce(sum(bytes), 0) from documento d where d.examen_id = e.id) as bytes
         from examen e join "user" u on u.id = e.user_id where e.estado = 'procesando' order by e.enviado`),

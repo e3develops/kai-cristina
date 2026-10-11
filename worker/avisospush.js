@@ -13,11 +13,6 @@ export async function avisar(env, userId, datos) {
   if (!jwk || !userId) return { dispositivos: 0, entregados: 0 };
   try { return await avisarUsuario(dbPush(env), userId, datos, { jwk }); } catch (e) { return { dispositivos: 0, entregados: 0 }; }
 }
-export async function avisarAlAdmin(env, datos) {
-  if (!env.ADMIN) return;
-  const u = await env.DB.prepare('select id from "user" where lower(email) = lower(?)').bind(env.ADMIN).first();
-  if (u) await avisar(env, u.id, datos);
-}
 
 const ENDPOINT_OK = /^https:\/\/[a-z0-9.-]+\//i;
 export function registrarPush(app) {

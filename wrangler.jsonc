@@ -38,6 +38,8 @@
     "EXAMEN_INICIAL": "cap28-taller2",
     // Clave pública del antibots (la secreta va en `wrangler secret put TURNSTILE_SECRET`)
     "TURNSTILE_SITEKEY": "0x4AAAAAAFTH3OphCVdp1Cua"
-  }
-  // Secretos (no van aquí): BETTER_AUTH_SECRET → `wrangler secret put BETTER_AUTH_SECRET`; en local, .dev.vars
+  },
+  // Secretos (no van aquí): BETTER_AUTH_SECRET, TURNSTILE_SECRET, VAPID_PRIVADO → `wrangler secret put …`; en local, .dev.vars
+  // Recordatorios diarios (9:00 en Madrid aprox.)
+  "triggers": { "crons": ["0 7 * * *"] }
 }

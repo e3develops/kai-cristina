@@ -10,7 +10,7 @@ import { why } from './porque.js';
 import { permisoAvisos, activarAvisos } from './avisos.js';
 
 // Lo que necesita de app.js (se pasa al arrancar para no tener imports circulares)
-let ctx = { abrirExamen: () => {}, nombre: () => '', iniciales: () => '', menuCuenta: () => {}, entrar: () => {} };
+let ctx = { abrirExamen: () => {}, nombre: () => '', iniciales: () => '', menuCuenta: () => {}, entrar: () => {}, abrirUrl: () => {} };
 export const configurarBiblioteca = c => { ctx = { ...ctx, ...c }; };
 
 export const EMOJIS = ['📘', '🧬', '🦴', '🫀', '🧠', '💊', '🩺', '🧪', '🦠', '🍎', '📐', '🌍', '🗣️', '🎨', '⚖️', '💻'];
@@ -19,10 +19,11 @@ export const COLORES = ['verde', 'azul', 'morado', 'rosa', 'naranja', 'gris'];
 // ---------- Datos (con copia en el dispositivo para usarla sin conexión) ----------
 const CACHE = 'kai-biblioteca';
 let LIB = (() => { try { return JSON.parse(localStorage.getItem(CACHE)) || { asignaturas: [], examenes: [] }; } catch (e) { return { asignaturas: [], examenes: [] }; } })();
+LIB.notis ||= { notificaciones: [], sinLeer: 0 };
 export async function cargarBiblioteca() {
   try {
-    const [asignaturas, examenes] = await Promise.all([api.asignaturas(), api.examenes()]);
-    LIB = { asignaturas, examenes };
+    const [asignaturas, examenes, notis] = await Promise.all([api.asignaturas(), api.examenes(), api.notificaciones().catch(() => null)]);
+    LIB = { asignaturas, examenes, notis: notis || LIB.notis || { notificaciones: [], sinLeer: 0 } };
     try { localStorage.setItem(CACHE, JSON.stringify(LIB)); } catch (e) { /* sin almacenamiento */ }
   } catch (e) {
     if (e instanceof SinSesion) throw e; // que app.js pida entrar
@@ -32,12 +33,14 @@ export async function cargarBiblioteca() {
 }
 // Pantalla de la biblioteca a la vista: se vuelve a pintar sola cuando cambian los datos
 // (al volver a la app, al llegar un aviso, o cada minuto mientras hay apuntes preparándose)
-let vista = null;
+let vista = null, vistaSiempre = false;
+// siempre = repintar en cada refresco aunque la biblioteca no cambie (el panel de administración trae sus datos)
+export const ponerVista = (fn, { siempre = false } = {}) => { vista = fn; vistaSiempre = siempre; };
 export async function refrescarBiblioteca({ forzar = false } = {}) {
   const antes = JSON.stringify(LIB);
   try { await cargarBiblioteca(); } catch (e) { return; }
   if (!vista || !app.querySelector('.screen.lib')) return;
-  if (!forzar && JSON.stringify(LIB) === antes && vista !== showAdmin) return;
+  if (!forzar && JSON.stringify(LIB) === antes && !vistaSiempre) return;
   // No interrumpir: ni con una ventana abierta ni escribiendo
   if (document.querySelector('.modal-bg, .viewer') || document.activeElement?.matches('input, textarea, select')) return;
   const y = window.scrollY;
@@ -78,6 +81,7 @@ function tabbar(activa) {
 function bindComun() {
   app.querySelectorAll('.tabbar [data-tab]').forEach(b => b.onclick = () => ({ inicio: showInicio, asignaturas: showAsignaturas, calendario: () => showCalendario() })[b.dataset.tab]());
   app.querySelector('#cuenta')?.addEventListener('click', ctx.menuCuenta);
+  app.querySelector('#campana')?.addEventListener('click', showNotificaciones);
   app.querySelectorAll('[data-examen]').forEach(el => el.addEventListener('click', e => { if (!e.target.closest('[data-why]')) abrir(el.dataset.examen); }));
   app.querySelectorAll('[data-nota]').forEach(el => el.onclick = () => pedirNota(LIB.examenes.find(x => x.id === el.dataset.nota)));
 }
@@ -90,10 +94,11 @@ function abrir(id) {
 }
 
 // ---------- Apuntes de un examen: subir, quitar y "prepárame este examen" ----------
+export const ayudas = { tabbar: a => tabbar(a), bindComun: () => bindComun(), conConexion: fn => conConexion(fn), fmtFecha: (...a) => fmtFecha(...a), fmtRango: r => fmtRango(r), pct: x => pct(x), fmtMB: b => fmtMB(b) };
 const fmtMB = b => `${(b / 1024 / 1024).toFixed(b < 10 * 1024 * 1024 ? 1 : 0).replace('.', ',')} MB`;
 export async function showApuntes(e) {
   // Si mientras se ve esta pantalla las preguntas quedan listas, se va al inicio (donde sale "¡ya están!")
-  vista = () => { const x = LIB.examenes.find(y => y.id === e.id); return x?.estado === 'listo' ? showInicio() : showApuntes(x || e); };
+  ponerVista(() => { const x = LIB.examenes.find(y => y.id === e.id); return x?.estado === 'listo' ? showInicio() : showApuntes(x || e); });
   const volver = () => (e.asignatura ? showAsignatura(e.asignatura) : showInicio());
   pintarApuntes(e, null);
   let info;
@@ -190,6 +195,49 @@ function tarjetaExamen(e, { conAsignatura = true } = {}) {
     <div class="bar"><i style="width:${pct(r?.dominado)}%"></i></div></div>`;
 }
 
+// ---------- Campanita: notificaciones de la cuenta ----------
+const ICONO_CAMPANA = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+function cabeceraDerecha() {
+  const n = LIB.notis.sinLeer;
+  return `<div class="top-acc"><button class="icon-btn campana" id="campana" aria-label="Notificaciones${n ? `, ${n} sin leer` : ''}">${ICONO_CAMPANA}${n ? `<span class="punto">${n > 9 ? '9+' : n}</span>` : ''}</button>
+    <button class="avatar" id="cuenta" aria-label="Tu cuenta">${esc(ctx.iniciales())}</button></div>`;
+}
+const ICONO_TIPO = { listo: '🎉', examen: '📅', nota: '📝', mensaje: '💬', admin: '📥' };
+const haceCuanto = t => {
+  const min = Math.round((Date.now() - t) / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.round(h / 24);
+  return d === 1 ? 'ayer' : d < 7 ? `hace ${d} días` : new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' }).format(t);
+};
+export async function showNotificaciones() {
+  ponerVista(showNotificaciones);
+  const lista = LIB.notis.notificaciones;
+  render(`
+    <div class="screen lib">
+      <div class="topbar"><button class="back-link" id="volver">‹ Inicio</button></div>
+      <h1>Notificaciones</h1>
+      ${ofrecerAvisos('¿Quieres recibirlas también en el móvil?')}
+      ${lista.length ? `<div class="notis">${lista.map(x => `<button class="card noti ${x.leida ? '' : 'nueva'}" ${x.url ? `data-url="${esc(x.url)}"` : ''}>
+          <span class="noti-ic" aria-hidden="true">${ICONO_TIPO[x.tipo] || '🔔'}</span>
+          <span class="noti-txt"><b>${esc(x.titulo)}</b><span>${esc(x.texto)}</span><small>${haceCuanto(x.creado)}</small></span>
+        </button>`).join('')}</div>`
+        : '<div class="vacio-card"><div class="vacio-ic">🔔</div><p class="muted">Aquí te avisaré cuando tus preguntas estén listas, cuando se acerque un examen o si te escribimos.</p></div>'}
+      ${tabbar('inicio')}
+    </div>`);
+  bindComun();
+  bindAvisos();
+  app.querySelector('#volver').onclick = showInicio;
+  app.querySelectorAll('.noti[data-url]').forEach(b => b.onclick = () => ctx.abrirUrl(new URL(b.dataset.url, location.origin)));
+  // Al verlas, quedan leídas (el punto rojo desaparece la próxima vez)
+  if (LIB.notis.sinLeer) {
+    api.notificacionesLeidas().catch(() => {});
+    LIB.notis = { ...LIB.notis, sinLeer: 0, notificaciones: lista.map(x => ({ ...x, leida: true })) };
+  }
+}
+
 // ---------- Avisos al móvil: ofrecerlos (sin insistir: "Ahora no" lo aparca una semana) ----------
 const AVISOS_NO = 'kai-avisos-no';
 function ofrecerAvisos(texto) {
@@ -216,7 +264,7 @@ function bindAvisos() {
 
 // ---------- Inicio: qué toca hoy ----------
 export async function showInicio({ silencioso = false } = {}) {
-  vista = showInicio;
+  ponerVista(showInicio);
   if (!silencioso) await cargarBiblioteca().catch(e => { if (e instanceof SinSesion) ctx.entrar(); throw e; });
   const rec = recomendar(LIB.examenes);
   const ex = LIB.examenes;
@@ -243,7 +291,7 @@ export async function showInicio({ silencioso = false } = {}) {
     <div class="screen lib">
       <div class="topbar">
         <div><div class="hello">Hola${nombre ? `, ${esc(nombre)}` : ''}&nbsp;👋</div><h1>¿Qué toca hoy?</h1></div>
-        <button class="avatar" id="cuenta" aria-label="Tu cuenta">${esc(ctx.iniciales())}</button>
+        ${cabeceraDerecha()}
       </div>
       <div class="kai-row"><div class="kai-wrap">${kaiSVG()}</div><div class="bubble">${bocadillo}</div></div>
       ${ex.filter(e => e.listoAviso && e.estado === 'listo').map(e => `<div class="card listo-card"><b>🎉 ¡Tus apuntes de ${esc(e.nombre)} ya están listos!</b><span class="muted small">He preparado ${e.preguntas ? `${e.preguntas} preguntas` : 'tus preguntas'} con ellos. ¿Empezamos?</span><button class="btn" data-examen="${e.id}">¡Vamos!</button></div>`).join('')}
@@ -259,7 +307,7 @@ export async function showInicio({ silencioso = false } = {}) {
 
 // ---------- Asignaturas ----------
 export async function showAsignaturas() {
-  vista = () => { render(vistaAsignaturas()); bindAsignaturas(); };
+  ponerVista(() => { render(vistaAsignaturas()); bindAsignaturas(); });
   render(vistaAsignaturas());
   bindAsignaturas();
   await cargarBiblioteca();
@@ -274,7 +322,7 @@ function vistaAsignaturas() {
   const proximoDe = id => examenesDe(id).filter(e => e.fecha && !yaPaso(e) && e.notaReal == null).sort((x, y) => x.fecha < y.fecha ? -1 : 1)[0];
   return `
     <div class="screen lib">
-      <div class="topbar"><h1>Asignaturas</h1><button class="avatar" id="cuenta" aria-label="Tu cuenta">${esc(ctx.iniciales())}</button></div>
+      <div class="topbar"><h1>Asignaturas</h1>${cabeceraDerecha()}</div>
       <div class="asig-lista">
         ${LIB.asignaturas.map(a => fila(a, examenesDe(a.id).length, proximoDe(a.id))).join('')}
         ${sueltos.length ? fila({ id: '', nombre: 'Sin asignatura', emoji: '🗂️', color: 'gris' }, sueltos.length, proximoDe(null)) : ''}
@@ -290,7 +338,7 @@ function bindAsignaturas() {
 }
 
 export function showAsignatura(id) {
-  vista = () => showAsignatura(id);
+  ponerVista(() => showAsignatura(id));
   const a = id ? LIB.asignaturas.find(x => x.id === id) : { id: null, nombre: 'Sin asignatura', emoji: '🗂️', color: 'gris' };
   if (!a) return showAsignaturas();
   const hecho = x => x.notaReal != null || yaPaso(x);
@@ -314,7 +362,7 @@ export function showAsignatura(id) {
 
 // ---------- Crear / editar asignatura ----------
 function formAsignatura(a = null) {
-  vista = null;
+  ponerVista(null);
   let emoji = a?.emoji || EMOJIS[0], color = a?.color || COLORES[0];
   render(`
     <div class="screen lib">
@@ -355,7 +403,7 @@ function formAsignatura(a = null) {
 
 // ---------- Crear / editar examen ----------
 export function formExamen(asignaturaId, e = null) {
-  vista = null;
+  ponerVista(null);
   const f0 = e?.formato || { opciones: 4, penalizacion: null };
   let opciones = f0.opciones || 4;
   let resta = f0.penalizacion == null ? 'nose' : f0.penalizacion === 0 ? 'no' : 'si';
@@ -448,7 +496,7 @@ function pedirNota(e) {
 let mesVisto = 0; // 0 = este mes, 1 = el siguiente…
 export function showCalendario(delta = null) {
   if (delta != null) mesVisto = delta;
-  vista = () => showCalendario();
+  ponerVista(() => showCalendario());
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const ini = new Date(hoy.getFullYear(), hoy.getMonth() + mesVisto, 1);
   const diasMes = new Date(ini.getFullYear(), ini.getMonth() + 1, 0).getDate();
@@ -525,39 +573,5 @@ export function explicarBiblioteca(key, arg) {
   }
 }
 
-// ---------- Panel del administrador ----------
-export async function showAdmin({ silencioso = false } = {}) {
-  vista = showAdmin;
-  if (!silencioso) render(`<div class="screen lib" id="admin"><div class="topbar"><button class="back-link" id="volver">‹ Inicio</button></div><h1>Administración</h1><p class="muted">Cargando…</p>${tabbar('')}</div>`);
-  app.querySelector('#volver').onclick = showInicio;
-  bindComun();
-  let r;
-  try { r = await api.adminResumen(); } catch (e) { return aviso(e instanceof SinConexion ? 'Necesitas conexión' : e.message); }
-  if (!app.querySelector('#admin')) return;
-  const e = r.espacio;
-  render(`
-    <div class="screen lib" id="admin">
-      <div class="topbar"><button class="back-link" id="volver">‹ Inicio</button></div>
-      <h1>Administración</h1>
-      <div class="card"><b>Espacio de apuntes</b>
-        <div class="bar"><i style="width:${Math.min(100, pct(e.usado / e.tope))}%"></i></div>
-        <span class="muted small">${fmtMB(e.usado)} de ${fmtMB(e.tope)} (tope para no salir de lo gratuito) · ${e.archivos} archivos · ${r.usuarios} usuarios</span></div>
-      <div class="section-title"><h2>Por preparar (${r.pendientes.length})</h2></div>
-      ${r.pendientes.length ? r.pendientes.map(p => `<div class="card lib-ex">
-        <div class="lib-ex-top"><b>${esc(p.nombre)}</b><span class="pill info">${p.archivos} archivos · ${fmtMB(p.bytes)}</span></div>
-        <span class="muted small">${esc(p.usuario)} (${esc(p.email)})${p.fecha ? ` · examen el ${fmtFecha(p.fecha)}` : ''} · enviado ${new Date(p.enviado).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</span>
-        <code class="cmd">node tools/fabrica.mjs descargar ${esc(p.id)}</code></div>`).join('') : '<p class="muted">Nada pendiente 🎉</p>'}
-      <div class="btn-row"><button class="btn secondary" id="probar-aviso">Email de prueba</button><button class="btn secondary" id="probar-push">Aviso de prueba</button></div>
-      ${tabbar('')}
-    </div>`);
-  app.querySelector('#volver').onclick = showInicio;
-  app.querySelector('#probar-aviso').onclick = async () => {
-    if (await conConexion(() => api.probarAviso())) aviso('Enviado: mira tu bandeja de entrada 📬', 4000);
-  };
-  app.querySelector('#probar-push').onclick = async () => {
-    if (permisoAvisos() === 'default') { try { await activarAvisos(); } catch (e) { /* abajo se ve */ } }
-    if (permisoAvisos() !== 'granted') return aviso(permisoAvisos() === 'no' ? 'Este dispositivo no admite avisos (en iPhone: con KAI instalada)' : 'Activa las notificaciones de KAI en Ajustes', 4500);
-    if (await conConexion(() => api.probarPush())) aviso('Enviado 📲', 3000);
-  };
-  bindComun();
-}
+// ---------- Panel del administrador: en admin.js ----------
+export { showAdmin } from './admin.js';

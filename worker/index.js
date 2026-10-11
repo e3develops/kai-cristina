@@ -5,6 +5,7 @@ import { mergeState } from '../src/engine/estado.js';
 import { validarAsignatura, validarExamen } from './validar.js';
 import { registrarApuntes } from './apuntes.js';
 import { registrarPush } from './avisospush.js';
+import { registrarNotificaciones, registrarAdmin, recordatoriosDiarios } from './notificaciones.js';
 
 const app = new Hono();
 
@@ -191,7 +192,13 @@ app.put('/api/progreso/:id', async c => {
 
 registrarApuntes(app);
 registrarPush(app);
+registrarNotificaciones(app);
+registrarAdmin(app);
 
 app.all('/api/*', c => c.json({ error: 'No existe' }, 404));
 
-export default app;
+export default {
+  fetch: app.fetch,
+  // Cada mañana: recordatorios de exámenes cercanos y de apuntar la nota
+  scheduled: (_, env, ctx) => ctx.waitUntil(recordatoriosDiarios(env)),
+};
