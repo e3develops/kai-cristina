@@ -2,6 +2,7 @@
 import { LIMITES, TIPOS, motivoRechazo } from './limites.js';
 import { avisarAdmin, avisarUnaVezAlDia } from './avisos.js';
 import { esAdmin } from './auth.js';
+import { avisarAlAdmin } from './avisospush.js';
 
 const docJson = d => ({ id: d.id, nombre: d.nombre, tipo: d.tipo, bytes: d.bytes, creado: d.creado });
 
@@ -77,6 +78,7 @@ export function registrarApuntes(app) {
     const u = c.get('user');
     c.executionCtx.waitUntil(avisarAdmin(c.env, `KAI: apuntes nuevos de ${u.name}`,
       `${u.name} (${u.email}) ha enviado apuntes para preparar.\n\nExamen: ${ex.nombre}${ex.fecha ? ` (el ${ex.fecha})` : ''}\nArchivos: ${docs.n} (${Math.round(docs.b / 1024 / 1024 * 10) / 10} MB)\nId: ${ex.id}\n\nPara procesarlo: node tools/fabrica.mjs descargar ${ex.id}`));
+    c.executionCtx.waitUntil(avisarAlAdmin(c.env, { titulo: 'KAI · apuntes nuevos', texto: `${u.name} ha enviado «${ex.nombre}» (${docs.n} ${docs.n === 1 ? 'archivo' : 'archivos'})`, url: '/?admin' }));
     return c.json({ ok: true });
   });
 

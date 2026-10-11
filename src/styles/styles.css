@@ -726,3 +726,7 @@ details.mas > .card { margin-top: 12px; }
 .centro { text-align: center; }
 .sub-h1 { margin-top: -8px; }
 #enviar + .centro { margin-top: -6px; }
+/* Ofrecer los avisos al móvil */
+.avisos-card { display: flex; flex-direction: column; gap: 8px; }
+.btn-row { display: flex; gap: 10px; }
+.btn-row > .btn { flex: 1; margin: 0; }

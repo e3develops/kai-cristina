@@ -13,3 +13,4 @@ contenido/*
 
 # Capturas de revisión de diseño (tools/capturas.mjs)
 capturas/
+.vapid.json

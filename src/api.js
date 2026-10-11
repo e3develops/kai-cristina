@@ -42,6 +42,10 @@ export const api = {
   visto: id => req(`/api/examenes/${id}/visto`, { method: 'POST', body: '{}' }),
   adminResumen: () => req('/api/admin/resumen'),
   probarAviso: () => req('/api/admin/probar-aviso', { method: 'POST', body: '{}' }),
+  clavePush: () => req('/api/push/clave'),
+  guardarPush: sub => req('/api/push', { method: 'POST', body: JSON.stringify(sub) }),
+  borrarPush: endpoint => req('/api/push', { method: 'DELETE', body: JSON.stringify({ endpoint }) }),
+  probarPush: () => req('/api/push/probar', { method: 'POST', body: '{}' }),
   // El archivo va tal cual en el cuerpo (no en JSON)
   subirDocumento: (id, blob, nombre) => req(`/api/examenes/${id}/documentos`, { method: 'POST', body: blob, headers: { 'Content-Type': blob.type, 'X-Nombre': encodeURIComponent(nombre) } }),
   salir: () => req('/api/auth/sign-out', { method: 'POST', body: '{}' }),

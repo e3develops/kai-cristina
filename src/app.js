@@ -8,7 +8,8 @@ import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, D
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
 import { fmtNota, describeFormato } from './engine/nota.js';
 import { why, explicacion, fmtRango } from './porque.js';
-import { configurarBiblioteca, cargarBiblioteca, showInicio, showAsignatura, formExamen, showAdmin, explicarBiblioteca, olvidarBiblioteca } from './biblioteca.js';
+import { configurarBiblioteca, cargarBiblioteca, showInicio, showAsignatura, formExamen, showAdmin, explicarBiblioteca, olvidarBiblioteca, refrescarBiblioteca, hayPreparando, abrirDesdeAviso } from './biblioteca.js';
+import { sincronizarAvisos, olvidarAvisos, escucharAvisos, permisoAvisos, activarAvisos } from './avisos.js';
 
 // ------------------------------------------------------------------
 // Configuración
@@ -1063,11 +1064,26 @@ async function arrancar() {
     iniciales: () => (sesion.user.nombre || sesion.user.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase(),
     entrar: () => showLogin(),
   });
+  sincronizarAvisos();
   let prefs = null;
   try { prefs = await api.preferencias(); } catch (e) { /* sin conexión: no se insiste */ }
   if (prefs && !prefs.presentacion) return showPresentacion(0);
   try { await showInicio(); } catch (e) { if (e instanceof SinSesion) showLogin(); }
+  const pedido = new URL(location.href);
+  if (pedido.search) { history.replaceState(null, '', pedido.pathname); abrirPedido(pedido); }
 }
+// Abre lo que indica un aviso (al tocarlo)
+function abrirPedido(url) {
+  const id = url.searchParams.get('examen');
+  if (id) return abrirDesdeAviso(id);
+  if (url.searchParams.has('admin') && sesionGuardada()?.user?.admin) showAdmin();
+}
+// Refresco automático: al llegar un aviso, al volver a la app y cada minuto mientras se preparan apuntes
+escucharAvisos({ alLlegar: () => refrescarBiblioteca(), alAbrir: abrirPedido });
+let ultimoRefresco = Date.now();
+const refrescar = () => { ultimoRefresco = Date.now(); if (sesionGuardada()?.user) refrescarBiblioteca(); };
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - ultimoRefresco > 10000) refrescar(); });
+setInterval(() => { if (document.visibilityState === 'visible' && hayPreparando()) refrescar(); }, 60000);
 
 // ---------- Presentación de KAI (una vez por cuenta, al entrar por primera vez) ----------
 function pasosPresentacion() {
@@ -1173,6 +1189,7 @@ function menuCuenta() {
     </div>
     <p class="muted small">Tu progreso se guarda en tu cuenta: puedes seguir desde cualquier dispositivo.</p>
     <div class="menu-list">
+      ${{ default: '<button data-a="avisos">Activar avisos</button>', granted: '<button data-a="avisos">Probar los avisos</button>' }[permisoAvisos()] || ''}
       <button data-a="presentacion">Ver la presentación de KAI</button>
       ${u.admin ? '<button data-a="admin">Administración</button>' : ''}
       <button class="peligro" data-a="salir">Cerrar sesión</button>
@@ -1182,6 +1199,14 @@ function menuCuenta() {
     el.querySelector('[data-a=close]').onclick = close;
     el.querySelector('[data-a=admin]')?.addEventListener('click', () => { close(); showAdmin(); });
     el.querySelector('[data-a=presentacion]').onclick = () => { close(); showPresentacion(0); };
+    el.querySelector('[data-a=avisos]')?.addEventListener('click', async () => {
+      close();
+      try {
+        const p = permisoAvisos() === 'granted' ? 'granted' : await activarAvisos();
+        if (p === 'granted') { await api.probarPush(); aviso('Te acabo de mandar un aviso de prueba 📲', 3500); }
+        else if (p === 'denied') aviso('Sin permiso: puedes activarlos en Ajustes › Notificaciones › KAI', 5000);
+      } catch (e) { aviso(e instanceof SinConexion ? 'Necesitas conexión para esto' : 'No he podido enviar el aviso. Inténtalo en un momento.'); }
+    });
     el.querySelector('[data-a=salir]').onclick = async () => {
       close();
       if (await confirmar({ titulo: '¿Cerrar sesión?', texto: 'Tu progreso queda guardado en tu cuenta.', si: 'Cerrar sesión', peligro: true })) cerrarSesion();
@@ -1285,6 +1310,7 @@ const antibots = (() => {
 
 async function cerrarSesion() {
   await sync();
+  await olvidarAvisos();
   try { await api.salir(); } catch (e) { /* aunque falle, se olvida aquí */ }
   olvidarSesion();
   olvidarBiblioteca();

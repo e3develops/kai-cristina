@@ -4,6 +4,7 @@ import { crearAuth, esAdmin } from './auth.js';
 import { mergeState } from '../src/engine/estado.js';
 import { validarAsignatura, validarExamen } from './validar.js';
 import { registrarApuntes } from './apuntes.js';
+import { registrarPush } from './avisospush.js';
 
 const app = new Hono();
 
@@ -189,6 +190,7 @@ app.put('/api/progreso/:id', async c => {
 });
 
 registrarApuntes(app);
+registrarPush(app);
 
 app.all('/api/*', c => c.json({ error: 'No existe' }, 404));
 

@@ -16,6 +16,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localizar, normaliza, UMBRAL } from './subrayar.mjs';
+import { avisarUsuario } from '../worker/push.js';
 
 const UMBRAL_TRANSCRIPCION = 0.9; // la transcripción es fiel: la cita tiene que estar casi letra por letra
 const UMBRAL_SUBRAYADO = 0.6;     // para subrayar basta con reconocer buena parte de la frase en la foto
@@ -125,15 +126,40 @@ const comandos = {
     console.log(`Siguiente: node tools/fabrica.mjs publicar ${eid}`);
   },
 
-  publicar(local, eid) {
+  async publicar(local, eid) {
     id(eid);
     const n = JSON.parse(readFileSync(join(ROOT, 'contenido', eid, 'preguntas.json'), 'utf8')).preguntas.length;
     if (!n) throw new Error('No hay preguntas que publicar');
     execFileSync('node', ['tools/subir_contenido.mjs', eid, local ? '--local' : '--remote'], { cwd: ROOT, stdio: 'inherit' });
     sql(`update examen set contenido = '${eid}', estado = 'listo', listo_aviso = 1 where id = '${eid}'`, local);
     console.log(`🎉 Publicado: ${n} preguntas. El usuario verá "¡Tus apuntes ya están listos!" al abrir KAI.`);
+    await avisarListo(local, eid, n);
+  },
+  // Repetir solo el aviso al móvil (p. ej. para probar)
+  async avisar(local, eid) {
+    id(eid);
+    const n = JSON.parse(readFileSync(join(ROOT, 'contenido', eid, 'preguntas.json'), 'utf8')).preguntas.length;
+    await avisarListo(local, eid, n);
   },
 };
+
+// Aviso al móvil del usuario: "tus preguntas están listas" (clave VAPID privada en .vapid.json, fuera de git)
+async function avisarListo(local, eid, n) {
+  const fichero = join(ROOT, '.vapid.json');
+  if (!existsSync(fichero)) return console.log('(sin .vapid.json: no se envía aviso al móvil)');
+  const [ex] = sql(`select user_id, nombre from examen where id = '${eid}'`, local);
+  if (!ex) return;
+  const db = {
+    todas: uid => sql(`select endpoint, p256dh, auth from push where user_id = '${uid.replace(/'/g, "''")}'`, local),
+    borrar: endpoint => sql(`delete from push where endpoint = '${endpoint.replace(/'/g, "''")}'`, local),
+  };
+  const r = await avisarUsuario(db, ex.user_id, {
+    titulo: '¡Tus preguntas están listas! 🎉',
+    texto: `He preparado ${n} preguntas de «${ex.nombre}». ¿Empezamos?`,
+    url: `/?examen=${eid}`,
+  }, { jwk: JSON.parse(readFileSync(fichero, 'utf8')) });
+  console.log(r.dispositivos ? `📲 Aviso enviado a ${r.entregados} de ${r.dispositivos} dispositivos` : '📵 El usuario no tiene los avisos activados');
+}
 
 // Ejecutar solo si se llama desde la terminal (los tests importan validarPregunta)
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
@@ -144,5 +170,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(0, 13).join('\n'));
     process.exit(1);
   }
-  try { comandos[cmd](local, eid); } catch (e) { console.error(`Error: ${e.message}`); process.exit(1); }
+  Promise.resolve().then(() => comandos[cmd](local, eid)).catch(e => { console.error(`Error: ${e.message}`); process.exit(1); });
 }

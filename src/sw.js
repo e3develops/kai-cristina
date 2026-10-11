@@ -43,3 +43,28 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || Promise.reject(new Error('offline'))))
   );
 });
+
+// ---------- Avisos (notificaciones push) ----------
+// Muestra el aviso y avisa a la app abierta para que se refresque sola
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { texto: e.data?.text() }; }
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(d.titulo || 'KAI', {
+      body: d.texto || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+      tag: d.url || 'kai', data: { url: d.url || '/' },
+    }),
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(cs => cs.forEach(c => c.postMessage({ tipo: 'aviso', datos: d }))),
+  ]));
+});
+// Al tocar el aviso: abre la app (o la trae al frente) en lo que dice el aviso
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || '/', self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    const c = cs[0];
+    if (c) { c.postMessage({ tipo: 'abrir', url }); return c.focus(); }
+    return self.clients.openWindow(url);
+  }));
+});
