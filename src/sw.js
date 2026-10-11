@@ -52,8 +52,8 @@ self.addEventListener('push', e => {
   e.waitUntil(Promise.all([
     // Título siempre "KAI" (si no, iOS añade "from KAI"): el aviso entero va en el cuerpo
     self.registration.showNotification('KAI', {
-      body: [d.titulo, d.texto].filter(Boolean).join('
-'), icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+      body: [d.titulo, d.texto].filter(Boolean).join('\n'),
+      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
       tag: d.url || 'kai', data: { url: d.url || '/' },
     }),
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
