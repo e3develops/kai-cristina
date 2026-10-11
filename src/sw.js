@@ -50,8 +50,10 @@ self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { texto: e.data?.text() }; }
   e.waitUntil(Promise.all([
-    self.registration.showNotification(d.titulo || 'KAI', {
-      body: d.texto || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+    // Título siempre "KAI" (si no, iOS añade "from KAI"): el aviso entero va en el cuerpo
+    self.registration.showNotification('KAI', {
+      body: [d.titulo, d.texto].filter(Boolean).join('
+'), icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
       tag: d.url || 'kai', data: { url: d.url || '/' },
     }),
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
