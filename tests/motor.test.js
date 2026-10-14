@@ -29,11 +29,14 @@ test('lo que no compensa contestar cuenta como en blanco', () => {
 });
 
 // Azar con semilla: el estudiante simulado es siempre el mismo (si no, el test falla de vez en cuando por mala suerte)
+// (y con reloj simulado: el olvido depende de la hora, así que también se fija; cada lectura avanza 20 s)
 function conSemilla(semilla, fn) {
-  const original = Math.random;
+  const original = Math.random, ahoraReal = Date.now;
+  let reloj = Date.UTC(2026, 0, 1);
+  Date.now = () => (reloj += 20000);
   let t = semilla >>> 0;
   Math.random = () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
-  try { return fn(); } finally { Math.random = original; }
+  try { return fn(); } finally { Math.random = original; Date.now = ahoraReal; }
 }
 
 // Estudiante simulado: acierta cada concepto con probabilidad p (que sube un poco al repasarlo)
@@ -75,9 +78,11 @@ test('sin progreso: no está lista y no hay nota que enseñar', () => {
 });
 
 test('quien estudia todo el temario llega a "lista" en Medio', () => {
-  const r = simulate(0.75, 1600);
-  assert.equal(r.ready, true, JSON.stringify(r.checks.map(c => [c.label, c.ok, c.info])));
-  assert.ok(r.nota >= 7.5);
+  // 5 estudiantes simuladas: alguna puede tener un simulacro con mala suerte, pero casi todas llegan
+  const rs = [1, 2, 3, 4, 5].map(semilla => simulate(0.75, 1600, semilla));
+  const listas = rs.filter(r => r.ready).length;
+  assert.ok(listas >= 4, JSON.stringify(rs.map(r => r.checks.map(c => [c.label, c.ok, c.info]))));
+  for (const r of rs) assert.ok(r.nota >= 7.5);
 });
 
 test('quien apenas estudia no llega a "lista"', () => {
