@@ -28,8 +28,19 @@ test('lo que no compensa contestar cuenta como en blanco', () => {
   assert.equal(notaDeProbabilidades([1, 0.2], f), 5);
 });
 
+// Azar con semilla: el estudiante simulado es siempre el mismo (si no, el test falla de vez en cuando por mala suerte)
+function conSemilla(semilla, fn) {
+  const original = Math.random;
+  let t = semilla >>> 0;
+  Math.random = () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+  try { return fn(); } finally { Math.random = original; }
+}
+
 // Estudiante simulado: acierta cada concepto con probabilidad p (que sube un poco al repasarlo)
-function simulate(pBase, answers) {
+function simulate(pBase, answers, semilla = 1) {
+  return conSemilla(semilla, () => simular(pBase, answers));
+}
+function simular(pBase, answers) {
   const state = freshState();
   const E = createEngine({ examen, data, state, save() {} });
   const skill = {};
