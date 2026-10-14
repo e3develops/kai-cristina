@@ -1,7 +1,7 @@
 // Progreso de un examen guardado en el dispositivo (localStorage). En la fase 1 se sincronizará con la BD.
 
 export function freshState() {
-  return { v: 1, onboarded: false, n: 0, c: {}, q: {}, diag: null, sims: [], readyShown: false, paused: {} };
+  return { v: 1, onboarded: false, n: 0, c: {}, q: {}, diag: null, sims: [], readyShown: false, paused: {}, nivel: null, nivelDesde: 0 };
 }
 
 export function loadState(key) {
@@ -47,7 +47,10 @@ export function mergeState(a, b) {
   }
   out.n = Math.max(a.n || 0, b.n || 0);
   out.onboarded = !!(a.onboarded || b.onboarded);
-  out.readyShown = !!(a.readyShown || b.readyShown);
+  // Nivel: gana el cambio de nivel más reciente; el "¡a punto!" solo vale si se vio en ese nivel
+  out.nivelDesde = Math.max(a.nivelDesde || 0, b.nivelDesde || 0);
+  out.nivel = ((b.nivelDesde || 0) > (a.nivelDesde || 0) ? b.nivel : a.nivel) || a.nivel || b.nivel || null;
+  out.readyShown = [a, b].some(s => s.readyShown && (s.nivelDesde || 0) >= out.nivelDesde);
   out.u = Math.max(a.u || 0, b.u || 0);
   out.c = {};
   for (const id of new Set([...Object.keys(a.c || {}), ...Object.keys(b.c || {})])) {

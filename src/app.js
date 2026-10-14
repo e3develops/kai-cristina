@@ -6,7 +6,7 @@ import { api, SinConexion, SinSesion, sesionGuardada, guardarSesion, olvidarSesi
 import { enPrincipal, hayBloqueo, irAReserva } from './reserva.js';
 import { createEngine, shuffle, secKey, pagKey, secName, fmtTime, SESSION_LEN, DIAG_LEN, SIM_LEN, MIN_FORECAST } from './engine/motor.js';
 import { freshState, loadState, saveState, mergeState } from './engine/estado.js';
-import { fmtNota, describeFormato } from './engine/nota.js';
+import { fmtNota, describeFormato, siguienteNivel } from './engine/nota.js';
 import { why, explicacion, fmtRango } from './porque.js';
 import { configurarBiblioteca, cargarBiblioteca, showInicio, showAsignatura, formExamen, showAdmin, explicarBiblioteca, olvidarBiblioteca, refrescarBiblioteca, hayPreparando, abrirDesdeAviso, showNotificaciones } from './biblioteca.js';
 import { sincronizarAvisos, olvidarAvisos, escucharAvisos, permisoAvisos, activarAvisos } from './avisos.js';
@@ -243,6 +243,8 @@ function showHome() {
       </div>
 
       ${main}
+
+      ${r.ready && siguienteNivel(E.nivel.id) ? tarjetaSubirNivel() : ''}
 
       <div class="card">
         <div class="ready-card">
@@ -894,6 +896,31 @@ function showResults() {
 }
 
 // ---------- ¡Estás lista! ----------
+// ---------- Subir de nivel (Fácil → Medio → Pro) ----------
+function tarjetaSubirNivel() {
+  const sig = siguienteNivel(E.nivel.id);
+  return `<div class="card nivel-card">
+    <b>🏆 ¡Nivel ${E.nivel.nombre} superado!</b>
+    <span class="muted small">Vas a punto para un ${E.nivel.promete}. ¿Vamos a por un <b>${sig.promete}</b>? En ${sig.nombre} entran más detalles y la meta es más alta.</span>
+    <button class="btn" data-subir-nivel>Subir a ${sig.nombre}</button>
+  </div>`;
+}
+async function subirNivel() {
+  const sig = siguienteNivel(E.nivel.id);
+  if (!sig) return;
+  if (!(await confirmar({
+    titulo: `¿Subimos a ${sig.nombre}?`,
+    texto: `La meta pasa a ser un ${sig.promete}. Lo que ya sabes se queda; el «¡a punto!» y los simulacros empiezan de cero en el nivel nuevo.`,
+    si: `Subir a ${sig.nombre}`,
+  }))) return;
+  try { await api.editarExamen(EXAMEN.id, { nivel: sig.id }); } catch (e) {
+    return aviso(e instanceof SinConexion ? 'Necesitas conexión para cambiar de nivel' : 'No he podido cambiar el nivel. Inténtalo otra vez.');
+  }
+  await abrirExamen(EXAMEN.id, ASIGNATURA);
+  aviso(`¡Nivel ${sig.nombre} activado! A por el ${sig.promete} 💪`, 3500);
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-subir-nivel]')) subirNivel(); });
+
 function showReady() {
   if (S.readyShown) return;
   S.readyShown = true;
@@ -908,7 +935,7 @@ function showReady() {
         <p>Ya puedes dejar de estudiar e ir al examen con calma. ¡Vas a bordarlo!</p>
         <p>Estoy muy orgulloso de ti&nbsp;💙</p>
       </div>
-      <div class="btn-col"><button class="btn" id="ok">¡Gracias, KAI!&nbsp;🤖</button></div>
+      <div class="btn-col"><button class="btn" id="ok">¡Gracias, KAI!&nbsp;🤖</button>${siguienteNivel(E.nivel.id) ? `<button class="btn secondary" data-subir-nivel>Ir a por un ${siguienteNivel(E.nivel.id).promete} (nivel ${siguienteNivel(E.nivel.id).nombre})</button>` : ''}</div>
     </div>`, 'celebrate');
   confetti();
   app.querySelector('#ok').onclick = showHome;
@@ -1172,6 +1199,10 @@ async function abrirExamen(id, asignatura = null) {
     const { estado } = await api.progreso(EXAMEN.id);
     if (estado) S = mergeState(S, estado);
   } catch (e) { /* sin conexión: con lo del móvil */ }
+  // Cambio de nivel (con "Subir de nivel" o editando el examen): la meta del nivel nuevo empieza de cero
+  // (lo que ya sabe se queda; los simulacros y el "¡a punto!" vuelven a contar desde ahora)
+  if (S.nivel && S.nivel !== EXAMEN.nivel) { S.nivelDesde = Date.now(); S.readyShown = false; }
+  S.nivel = EXAMEN.nivel;
   E = createEngine({ examen: EXAMEN, data: DATA, state: S, save });
   Q = E.Q;
   pauseCurrent();

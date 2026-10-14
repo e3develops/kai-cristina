@@ -39,3 +39,5 @@ export const NIVELES = {
   pro: { id: 'pro', nombre: 'Pro', promete: '9-10', importanciaMin: 1, nota: 9.0, notaTema: 8.0, cobertura: 0.95, sims: 2, notaSim: 9.0 },
 };
 export const nivel = id => NIVELES[id] || NIVELES.medio;
+// El nivel de después (Fácil → Medio → Pro); null si ya es Pro
+export const siguienteNivel = id => ({ facil: NIVELES.medio, medio: NIVELES.pro })[id] || null;

@@ -149,3 +149,23 @@ test('simulacros antiguos (solo con % de aciertos) siguen contando', () => {
   assert.ok(Math.abs(E.readiness().lastSim - (notaDeAciertos(0.9, E.formato) + notaDeAciertos(0.85, E.formato)) / 2) < 1e-9);
   assert.equal(SIM_LEN, 40);
 });
+
+test('subir de nivel: lo sabido se queda, pero los simulacros del nivel anterior no cuentan', () => {
+  const state = freshState();
+  const E = createEngine({ examen, data, state, save() {} });
+  state.sims.push({ date: 1000, score: 1, n: 0 }, { date: 2000, score: 1, n: 0 });
+  assert.equal(E.readiness().lastSim, 10);
+  state.nivelDesde = 3000; // sube de nivel después de esos simulacros
+  assert.equal(E.readiness().lastSim, null);
+  state.sims.push({ date: 4000, score: 0.5, n: 0 });
+  assert.ok(E.readiness().lastSim < 10);
+});
+
+test('sincronizar tras subir de nivel: gana el nivel nuevo y el "¡a punto!" antiguo no vale', () => {
+  const viejo = { ...freshState(), nivel: 'medio', nivelDesde: 0, readyShown: true, u: 5 };
+  const nuevo = { ...freshState(), nivel: 'pro', nivelDesde: 100, readyShown: false, u: 3 };
+  const m = mergeState(viejo, nuevo);
+  assert.equal(m.nivel, 'pro');
+  assert.equal(m.nivelDesde, 100);
+  assert.equal(m.readyShown, false);
+});

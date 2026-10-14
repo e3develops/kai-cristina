@@ -783,3 +783,5 @@ details.mas > .card { margin-top: 12px; }
 body.viendo-como #app { padding-top: calc(env(safe-area-inset-top) + 16px + 44px); }
 .usuario .ojo { flex: 0 0 auto; color: var(--ink-2); cursor: pointer; }
 .usuario .ojo:active { transform: scale(.92); }
+/* Subir de nivel */
+.nivel-card { display: flex; flex-direction: column; gap: 8px; border: 2px solid var(--accent); background: linear-gradient(180deg, var(--accent-soft), var(--card) 70%); }

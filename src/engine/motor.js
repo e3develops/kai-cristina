@@ -192,7 +192,7 @@ export function createEngine({ examen, data, state, save, now = () => Date.now()
     const notaHoy = futuro ? nota() : notaAll;
     const temas = data.temas.map(t => ({ ...t, d: estimate({ tema: t.id }, at), nota: nota({ tema: t.id }, at), cov: coverage({ tema: t.id }) }));
     // Media de los últimos simulacros que pide el nivel: uno solo se puede aprobar por suerte
-    const lastN = S.sims.slice(-N.sims);
+    const lastN = S.sims.filter(x => (x.date || 0) >= (S.nivelDesde || 0)).slice(-N.sims);
     const lastSim = lastN.length ? lastN.reduce((a, x) => a + simNota(x), 0) / lastN.length : null;
     const work = remainingWork();
     const checks = [
