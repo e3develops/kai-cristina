@@ -1,7 +1,8 @@
 // Panel del administrador: solicitudes de apuntes, usuarios (sus datos y cómo van) y mensajes
 import { app, esc, render, modal, aviso, confirmar } from './ui.js';
 import { api, SinConexion } from './api.js';
-import { ayudas, ponerVista, showInicio } from './biblioteca.js';
+import { ayudas, ponerVista, showInicio, olvidarBiblioteca } from './biblioteca.js';
+import { sesionGuardada } from './api.js';
 import { permisoAvisos, activarAvisos } from './avisos.js';
 import { fmtNota, nivel as nivelDe } from './engine/nota.js';
 
@@ -52,7 +53,8 @@ function pintar(cuerpo) {
   app.querySelector('#volver').onclick = showInicio;
   app.querySelector('#reintentar')?.addEventListener('click', () => showAdmin());
   app.querySelectorAll('[data-tab-admin]').forEach(b => b.onclick = () => b.dataset.tabAdmin !== pestana && showAdmin({ tab: b.dataset.tabAdmin }));
-  app.querySelectorAll('[data-usuario]').forEach(b => b.addEventListener('click', ev => { if (!ev.target.closest('[data-docs]')) showUsuario(b.dataset.usuario); }));
+  app.querySelectorAll('[data-usuario]').forEach(b => b.addEventListener('click', ev => { if (!ev.target.closest('[data-docs], [data-suplantar]')) showUsuario(b.dataset.usuario); }));
+  app.querySelectorAll('[data-suplantar]').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); suplantar(b.dataset.suplantar, b.dataset.nombre); }));
   app.querySelectorAll('[data-docs]').forEach(b => b.onclick = ev => { ev.stopPropagation(); verApuntes(b.dataset.docs, b.dataset.titulo); });
   bindMensaje();
   app.querySelector('#probar-aviso')?.addEventListener('click', async () => {
@@ -109,7 +111,18 @@ function htmlUsuarios(us) {
       <span class="usuario-txt"><b>${esc(u.nombre)}</b><span class="muted small">${esc(u.email)}</span>
         <span class="muted small">${u.examenes} ${u.examenes === 1 ? 'examen' : 'exámenes'} · ${u.respuestas} respuestas · estudió ${haceCuanto(u.ultimoEstudio)}</span></span>
       <span class="usuario-pills">${u.preparando ? '<span class="pill info">preparando</span>' : ''}${u.dispositivos ? '<span class="pill" title="Avisos activados">🔔</span>' : ''}</span>
+      ${u.id !== sesionGuardada()?.user?.id ? `<span class="icon-btn ojo" role="button" tabindex="0" data-suplantar="${esc(u.id)}" data-nombre="${esc(u.nombre)}" aria-label="Ver la app como ${esc(u.nombre)} (copia)">${OJO}</span>` : ''}
     </button>`).join('')}</div>`;
+}
+const OJO = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+// "Ver como": se hace una COPIA de sus datos de ahora y la app pasa a verse como esa persona
+async function suplantar(id, nombre) {
+  if (!(await confirmar({ titulo: `¿Ver KAI como ${esc(nombre)}?`, texto: 'Haré una copia de sus datos de este momento. Lo que hagas ahí no cambia nada suyo, y al salir la copia se borra.', si: `Ver como ${esc(nombre.split(' ')[0])}` }))) return;
+  const r = await conConexion(() => api.suplantar(id));
+  if (!r) return;
+  olvidarBiblioteca();
+  location.replace('/');
 }
 const iniciales = u => (u.nombre || u.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
 
@@ -148,7 +161,7 @@ export async function showUsuario(id, { silencioso = false } = {}) {
         <div class="stat"><b>${u.documentos.length}</b><span>archivos</span></div>
       </div>
       <p class="muted small">Alta: ${fechaCorta(u.alta)} · Última vez: ${haceCuanto(u.ultimaSesion)}</p>
-      <button class="btn secondary" id="escribir">Enviar un mensaje</button>
+      <div class="btn-row"><button class="btn secondary" id="escribir">Enviar un mensaje</button>${u.id !== sesionGuardada()?.user?.id ? '<button class="btn secondary" id="ver-como">Ver como</button>' : ''}</div>
       ${grupos.length ? grupos.map(([aid, l]) => `<div class="section-title"><h2>${aid ? `${asig[aid].emoji} ${esc(asig[aid].nombre)}` : 'Sin asignatura'}</h2></div>${l.map(examen).join('')}`).join('')
         : '<p class="muted">Aún no ha creado ningún examen.</p>'}
       ${tabbar('')}
@@ -156,6 +169,7 @@ export async function showUsuario(id, { silencioso = false } = {}) {
   bindComun();
   app.querySelector('#volver').onclick = () => showAdmin({ tab: 'usuarios' });
   app.querySelectorAll('[data-docs]').forEach(b => b.onclick = () => verApuntes(b.dataset.docs, b.dataset.titulo));
+  app.querySelector('#ver-como')?.addEventListener('click', () => suplantar(u.id, u.nombre));
   app.querySelector('#escribir').onclick = () => modal(`
     <h2>Mensaje para ${esc(u.nombre)}</h2>
     ${formMensaje()}

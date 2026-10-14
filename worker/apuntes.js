@@ -3,6 +3,7 @@ import { LIMITES, TIPOS, motivoRechazo } from './limites.js';
 import { avisarAdmin, avisarUnaVezAlDia } from './avisos.js';
 import { esAdmin } from './auth.js';
 import { notificarAdmin } from './notificaciones.js';
+import { borrarHuerfanos } from './suplantar.js';
 
 const docJson = d => ({ id: d.id, nombre: d.nombre, tipo: d.tipo, bytes: d.bytes, creado: d.creado });
 
@@ -62,8 +63,8 @@ export function registrarApuntes(app) {
       .bind(c.req.param('doc'), c.get('user').id).first();
     if (!d) return c.json({ error: 'No existe' }, 404);
     if (d.estado !== 'pendiente') return c.json({ error: 'Este examen ya se está preparando: no se pueden quitar apuntes ahora.' }, 409);
-    await c.env.APUNTES.delete(d.clave);
     await c.env.DB.prepare('delete from documento where id = ?').bind(d.id).run();
+    await borrarHuerfanos(c.env, [d.clave]); // si la copia de "ver como" (u otra fila) lo usa, el archivo se queda
     return c.json({ ok: true });
   });
 
@@ -104,9 +105,9 @@ export function registrarApuntes(app) {
       c.env.DB.prepare(`select e.id, e.nombre, e.fecha, e.enviado, e.user_id as usuarioId, u.name as usuario, u.email,
         (select count(*) from documento d where d.examen_id = e.id) as archivos,
         (select coalesce(sum(bytes), 0) from documento d where d.examen_id = e.id) as bytes
-        from examen e join "user" u on u.id = e.user_id where e.estado = 'procesando' order by e.enviado`),
+        from examen e join "user" u on u.id = e.user_id where e.estado = 'procesando' and u.id not like 'sombra-%' order by e.enviado`),
       c.env.DB.prepare('select coalesce(sum(bytes), 0) as b, count(*) as n from documento'),
-      c.env.DB.prepare('select count(*) as n from "user"'),
+      c.env.DB.prepare(`select count(*) as n from "user" where id not like 'sombra-%'`),
     ]);
     return c.json({ pendientes: p.results, espacio: { usado: g.results[0].b, archivos: g.results[0].n, tope: LIMITES.global }, usuarios: us.results[0].n });
   });

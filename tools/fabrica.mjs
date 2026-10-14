@@ -48,7 +48,7 @@ const id = s => { if (!/^[\w-]{8,64}$/.test(s || '')) throw new Error('Id de exa
 const comandos = {
   pendientes(local) {
     const rows = sql(`select e.id, e.nombre, e.fecha, u.email, (select count(*) from documento d where d.examen_id = e.id) as archivos
-      from examen e join "user" u on u.id = e.user_id where e.estado = 'procesando' order by e.enviado`, local);
+      from examen e join "user" u on u.id = e.user_id where e.estado = 'procesando' and e.user_id not like 'sombra-%' order by e.enviado`, local);
     if (!rows.length) return console.log('Nada pendiente 🎉');
     rows.forEach(r => console.log(`${r.id}  ${r.nombre}  (${r.email}, ${r.archivos} archivos${r.fecha ? `, examen ${r.fecha}` : ''})`));
   },

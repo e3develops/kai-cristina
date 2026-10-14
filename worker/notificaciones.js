@@ -80,7 +80,7 @@ export function registrarAdmin(app) {
       (select count(*) from documento d where d.user_id = u.id) as archivos,
       (select coalesce(sum(d.bytes), 0) from documento d where d.user_id = u.id) as bytes,
       (select count(*) from push x where x.user_id = u.id) as dispositivos
-      from "user" u order by u.createdAt desc`).all();
+      from "user" u where u.id not like 'sombra-%' order by u.createdAt desc`).all();
     return c.json(results);
   });
 
@@ -128,7 +128,7 @@ export function registrarAdmin(app) {
     const texto = String(b.texto || '').trim().slice(0, 600);
     if (!titulo || !texto) return c.json({ error: 'Escribe un título y un mensaje.' }, 400);
     const ids = b.destino === 'todos'
-      ? (await c.env.DB.prepare('select id from "user"').all()).results.map(r => r.id)
+      ? (await c.env.DB.prepare(`select id from "user" where id not like 'sombra-%'`).all()).results.map(r => r.id)
       : [String(b.destino || '')];
     if (b.destino !== 'todos' && !(await c.env.DB.prepare('select 1 from "user" where id = ?').bind(ids[0]).first())) return c.json({ error: 'Ese usuario no existe' }, 404);
     // Los avisos al móvil, en segundo plano (con muchos usuarios tarda)

@@ -1059,6 +1059,7 @@ async function arrancar() {
   }
   NAME = (sesion.user.nombre || '').split(' ')[0];
   guardarSesion(sesion);
+  bandaSuplantacion(sesion.user.suplantando);
   configurarBiblioteca({
     abrirExamen, nombre: () => NAME, menuCuenta,
     iniciales: () => (sesion.user.nombre || sesion.user.email || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase(),
@@ -1073,6 +1074,23 @@ async function arrancar() {
   const pedido = new URL(location.href);
   if (pedido.search) { history.replaceState(null, '', pedido.pathname); abrirPedido(pedido); }
 }
+// "Ver como": el administrador está usando una copia de los datos de otra persona
+function bandaSuplantacion(nombre) {
+  document.querySelector('.banda-sombra')?.remove();
+  document.body.classList.toggle('viendo-como', !!nombre);
+  if (!nombre) return;
+  const b = document.createElement('div');
+  b.className = 'banda-sombra';
+  b.setAttribute('role', 'status');
+  b.innerHTML = `<span>👁 Viendo como <b>${esc(nombre)}</b> · copia</span><button type="button">Salir</button>`;
+  b.querySelector('button').onclick = async () => {
+    try { await api.salirSuplantacion(); } catch (e) { return aviso(e instanceof SinConexion ? 'Necesitas conexión para salir' : 'No he podido salir. Inténtalo otra vez.'); }
+    olvidarBiblioteca();
+    location.replace('/?admin');
+  };
+  document.body.appendChild(b);
+}
+
 // Abre lo que indica un aviso (al tocarlo)
 function abrirPedido(url) {
   const id = url.searchParams.get('examen');

@@ -775,3 +775,11 @@ details.mas > .card { margin-top: 12px; }
 .noti-borrar { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 22px; background: var(--ko); color: #fff; font-weight: 800; font-size: 15px; border-radius: var(--radius); opacity: calc(.35 + var(--tirar, 0) * .65); }
 .noti { touch-action: pan-y; transition: transform var(--dur-3) var(--ease-out); margin: 0; }
 .noti.arrastrando { transition: none; }
+
+/* "Ver como": banda fija arriba mientras el administrador usa una copia de otro usuario */
+.banda-sombra { position: fixed; top: 0; left: 0; right: 0; z-index: 45; display: flex; align-items: center; justify-content: center; gap: 12px; padding: calc(env(safe-area-inset-top) + 6px) 16px 6px; background: #3B2A63; color: #fff; font-size: 14px; font-weight: 700; box-shadow: 0 2px 10px rgba(0, 0, 0, .15); }
+.banda-sombra b { font-weight: 900; }
+.banda-sombra button { appearance: none; border: 0; background: rgba(255, 255, 255, .18); color: #fff; font: 800 13px/1 var(--font); padding: 8px 12px; border-radius: 99px; min-height: 32px; cursor: pointer; }
+body.viendo-como #app { padding-top: calc(env(safe-area-inset-top) + 16px + 44px); }
+.usuario .ojo { flex: 0 0 auto; color: var(--ink-2); cursor: pointer; }
+.usuario .ojo:active { transform: scale(.92); }

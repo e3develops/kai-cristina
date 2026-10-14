@@ -6,6 +6,7 @@ import { validarAsignatura, validarExamen } from './validar.js';
 import { registrarApuntes } from './apuntes.js';
 import { registrarPush } from './avisospush.js';
 import { registrarNotificaciones, registrarAdmin, recordatoriosDiarios } from './notificaciones.js';
+import { aplicarSuplantacion, registrarSuplantar, borrarHuerfanos } from './suplantar.js';
 
 const app = new Hono();
 
@@ -24,6 +25,7 @@ app.use('/api/*', async (c, next) => {
   const s = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!s) return c.json({ error: 'Necesitas iniciar sesión' }, 401);
   c.set('user', s.user);
+  await aplicarSuplantacion(c); // el administrador viendo la copia de otro usuario
   await next();
 });
 // Nada de la API se guarda en cachés intermedias: son datos privados
@@ -47,7 +49,8 @@ app.patch('/api/preferencias', async c => {
 
 app.get('/api/yo', c => {
   const u = c.get('user');
-  return c.json({ id: u.id, nombre: u.name, email: u.email, admin: esAdmin(c.env, u) });
+  const sup = c.get('suplantando');
+  return c.json({ id: u.id, nombre: u.name, email: u.email, admin: !!sup || esAdmin(c.env, u), suplantando: sup?.nombre || null });
 });
 
 const base = c => `/api/examenes/${c.req.param('id')}`;
@@ -132,12 +135,13 @@ app.delete('/api/examenes/:id', async c => {
   if (!row || row.user_id !== c.get('user').id) return c.json({ error: 'No existe' }, 404);
   // Sus apuntes también se borran de R2
   const { results: docs } = await c.env.DB.prepare('select clave from documento where examen_id = ?').bind(row.id).all();
-  if (docs.length && c.env.APUNTES) await c.env.APUNTES.delete(docs.map(d => d.clave));
   await c.env.DB.batch([
     c.env.DB.prepare('delete from documento where examen_id = ?').bind(row.id),
     c.env.DB.prepare('delete from progreso where examen_id = ?').bind(row.id),
     c.env.DB.prepare('delete from examen where id = ?').bind(row.id),
   ]);
+  // Sus apuntes también se borran de R2 (salvo los que use otra fila: p. ej. la copia de "ver como")
+  await borrarHuerfanos(c.env, docs.map(d => d.clave));
   return c.json({ ok: true });
 });
 
@@ -194,6 +198,7 @@ registrarApuntes(app);
 registrarPush(app);
 registrarNotificaciones(app);
 registrarAdmin(app);
+registrarSuplantar(app);
 
 app.all('/api/*', c => c.json({ error: 'No existe' }, 404));
 
